@@ -1,0 +1,12 @@
+{
+  "name": "tawuniya-synergy-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
+    "check": "node --check src/project-hold.js && node --check src/project-hold-ui.js && node --check src/app.js && node --check src/artifact-review.js && node --check src/document-validator.js && node --check src/document-upload.js && node --check src/demo-access.js && node --check src/foundation-views.js && node --check src/platform-shell.js && node --check src/assistance-chat.js && node --check src/forecast-model.js && node --check src/forecast-data.js && node --check src/forecast-view.js && node --check src/forecast-insights.js && node --check src/quality-rules.js && node --check src/quality-data.js && node --check src/quality-engine.js && node --check src/quality-view.js && node --check server.mjs",
+    "test": "node --test"
+  }
+}

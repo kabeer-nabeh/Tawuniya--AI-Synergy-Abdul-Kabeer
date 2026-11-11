@@ -1,0 +1,91 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createHoldDocument,extractHoldFields,holdCounts,HOLD_FIELDS } from '../src/project-hold.js';
+import { PROJECTS } from '../src/demo-access.js';
+import { checkDocument,saveDocument,freshValidator,addUploadedDocument,documentValidatorUI } from '../src/document-validator.js';
+import { holdReport,holdEditor } from '../src/project-hold-ui.js';
+const project=PROJECTS[0];
+test('Project Hold rules distinguish missing data, date order, source mismatch and skipped services',()=>{
+ const doc=createHoldDocument('hold-alpha',project);doc.artifact.fields.manager='Wrong manager';
+ const review=checkDocument(doc);
+ assert.equal(review.checks.manager,'passed');
+ assert.equal(review.checks['match-manager'],'failed');
+ assert.equal(review.checks['date-order'],'failed');
+ assert.equal(review.checks.planning,'failed');
+ assert.equal(review.checks.signature,'skipped');
+ assert.equal(review.checks.ai,'skipped');
+ assert.equal(holdCounts(review).skipped,4);
+ assert.equal(review.findings.length,26);
+});
+test('correction, recheck, regression and immutable project evidence',()=>{
+ const doc=createHoldDocument('hold-alpha',project),first=checkDocument(doc);
+ saveDocument(doc,{...doc.artifact.fields,resumeDate:'2027-03-31',planningName:'Demo planning reviewer',planningDate:'2026-11-30'});
+ const second=checkDocument(doc);
+ assert.equal(holdCounts(second).failed,0);
+ assert.equal(second.previous.planning,'failed');
+ assert.equal(first.fields.planningName,'');
+ doc.project.owner[0]='Different source owner';
+ assert.equal(first.project.owner[0],project.owner[0]);
+ saveDocument(doc,{...doc.artifact.fields,reason:''});
+ const third=checkDocument(doc);
+ assert.equal(third.checks.reason,'failed');
+ assert.equal(second.checks.reason,'passed');
+ assert.equal(third.run,3);
+});
+test('upload extraction never fills missing content from the selected project',()=>{
+ const v=freshValidator();
+ addUploadedDocument(v,{name:'hold.txt',text:'Project name: Other project\nProject manager:\nExecutor sector: Health',extension:'txt'},'project-hold','upload-1',project);
+ const d=v.documents['upload-1'];
+ assert.equal(d.artifact.fields.manager,'');
+ assert.equal(d.artifact.fields.projectName,'Other project');
+ assert.equal(checkDocument(d).checks['match-projectName'],'failed');
+ assert.throws(()=>addUploadedDocument(v,{text:'x'},'project-hold','x'),/project-required/);
+});
+test('labeled extraction preserves dates for validation and rejects next-heading borrowing',()=>{
+ const fields=extractHoldFields('Project hold date: 2026-02-30\nExpected resumption date: 2027-01-01\nProject hold reason:\nImpact of the hold: Cost increase');
+ assert.equal(fields.holdDate,'2026-02-30');assert.equal(fields.reason,'');assert.equal(fields.impact,'Cost increase');
+ const multiline=extractHoldFields('Project Manager\nAfnan Rayyani\nProject hold reason\nAwaiting agreement');
+ assert.equal(multiline.manager,'Afnan Rayyani');assert.equal(multiline.reason,'Awaiting agreement');
+});
+test('report exposes skipped reasons, escapes fields and preserves correction hooks',()=>{
+ const doc=createHoldDocument('hold-alpha',project);doc.artifact.fields.reason='<img onerror=alert(1)>';
+ checkDocument(doc);
+ const escape=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
+ const ctx={document:doc,descriptor:{id:'hold-alpha',name:()=>'<script>report'},validator:{filter:'all'},t:en=>en,icon:()=>'',escape};
+ const html=holdReport(ctx);
+ assert.ok(html.includes('&lt;script>report'));assert.ok(!html.includes('<img onerror'));
+ assert.ok(html.includes('Signature verification is not connected'));
+ assert.ok(html.includes('data-field="hold-resumeDate"'));
+ assert.ok(holdEditor({...ctx,fields:doc.artifact.fields}).includes('name="planningName"'));
+});
+
+test('Project Hold setup guides to an in-scope project before offering validation',()=>{
+ const validator=freshValidator();validator.upload={...validator.upload,templateId:'project-hold',file:{name:'hold.txt',text:'Project name: Project Alpha',extension:'txt',size:50}};
+ const ctx={t:en=>en,icon:()=>'',escape:s=>String(s),documents:[],validator,definitions:()=>[],projects:[project]};
+ let html=documentValidatorUI(ctx);
+ assert.match(html,/id="validator-project"/);
+ assert.match(html,/Select project<\/button>/);
+ validator.upload.projectId='outside-scope';
+ assert.match(documentValidatorUI(ctx),/Select project<\/button>/);
+ validator.upload.projectId=project.id;
+ assert.match(documentValidatorUI(ctx),/Validate document<\/button>/);
+ assert.match(documentValidatorUI({...ctx,projects:[]}),/This account has no assigned project/);
+});
+test('library, report and old revisions render through the shared validator in both languages',()=>{
+ const validator=freshValidator(),doc=createHoldDocument('hold-alpha',project);
+ validator.documents['hold-alpha']=doc;checkDocument(doc);
+ const descriptor={id:'hold-alpha',hold:true,name:()=> 'Project Hold · Project Alpha',meta:()=> 'Sample'};
+ const ctx={t:en=>en,icon:()=>'',escape:s=>String(s),documents:[descriptor],validator,definitions:()=>[],projects:[project]};
+ assert.match(documentValidatorUI(ctx),/Needs revision/);
+ validator.selected=descriptor.id;
+ assert.match(documentValidatorUI(ctx),/26 checks/);
+ saveDocument(doc,{...doc.artifact.fields,resumeDate:'2027-03-31',planningName:'Demo planning',planningDate:'2026-11-30'});
+ checkDocument(doc);
+ assert.match(documentValidatorUI(ctx),/Local checks passed; human review remains/);
+ validator.run=1;
+ const old=documentValidatorUI(ctx);
+ assert.match(old,/Saved changes need a recheck/);assert.match(old,/Earlier check/);
+ assert.match(documentValidatorUI({...ctx,t:(_en,ar)=>ar}),/الفحص/);
+ const another=freshValidator();
+ assert.equal(another.documents['hold-alpha'],undefined);
+});

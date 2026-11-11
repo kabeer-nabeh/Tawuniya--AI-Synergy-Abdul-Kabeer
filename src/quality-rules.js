@@ -1,0 +1,63 @@
+// Data-quality rule catalog (illustrative). Every rule belongs to one category, has a default severity,
+// a plain-language explanation and a recommended next step. Thresholds marked with `param` are configurable.
+// The exact rule set, severities and thresholds are working assumptions to confirm with EPMO and the rule catalog owner.
+
+export const CATEGORIES = {
+  completeness: { name: ['Completeness', 'الاكتمال'], hint: ['A required value is missing.', 'قيمة مطلوبة غير موجودة.'] },
+  validity: { name: ['Validity', 'الصلاحية'], hint: ['A value is impossible or outside its allowed range.', 'قيمة مستحيلة أو خارج النطاق المسموح.'] },
+  consistency: { name: ['Consistency', 'الاتساق'], hint: ['Two fields of the same record contradict each other.', 'حقلان في السجل نفسه يتعارضان.'] },
+  uniqueness: { name: ['Uniqueness', 'التفرد'], hint: ['The same thing is recorded more than once.', 'الشيء نفسه مسجّل أكثر من مرة.'] },
+  timeliness: { name: ['Timeliness', 'التوقيت'], hint: ['Data is late, or a date has passed without an update.', 'بيانات متأخرة، أو تاريخ مضى دون تحديث.'] },
+  statistical: { name: ['Statistical', 'إحصائي'], hint: ['A value or pattern is unusual compared with its own history.', 'قيمة أو نمط غير معتاد مقارنة بتاريخه.'] },
+};
+export const CATEGORY_ORDER = ['completeness', 'validity', 'consistency', 'uniqueness', 'timeliness', 'statistical'];
+export const SEVERITIES = ['high', 'medium', 'low'];
+export const SEVERITY_LABEL = { high: ['High', 'مرتفع'], medium: ['Medium', 'متوسط'], low: ['Low', 'منخفض'] };
+export const OBJECT_TYPES = { project: ['Project', 'مشروع'], kpi: ['KPI', 'مؤشر أداء'] };
+
+export const STATUSES = {
+  open: ['Open', 'مفتوح'],
+  acknowledged: ['Acknowledged', 'تم الاطلاع'],
+  explained: ['Explained', 'مبرَّر'],
+  'false-positive': ['False positive', 'إنذار خاطئ'],
+};
+
+/** Configurable thresholds with the choices offered in the rules panel. */
+export const PARAMS = {
+  spikeZ: { default: 3.5, options: [3, 3.5, 4, 5], rule: 'x-spike', label: ['Spike or drop sensitivity (standard deviations)', 'حساسية القفزة أو الهبوط (انحرافات معيارية)'], note: ['Lower values flag more points.', 'القيم الأقل تُظهر نقاطًا أكثر.'] },
+  shiftSd: { default: 3, options: [2.5, 3, 4], rule: 'x-shift', label: ['Level shift sensitivity (standard deviations)', 'حساسية تغيّر المستوى (انحرافات معيارية)'], note: ['How far the last 3 periods must move from the 6 before.', 'مدى ابتعاد آخر 3 فترات عن الـ 6 السابقة.'] },
+  repeatMin: { default: 4, options: [3, 4, 5, 6], rule: 'x-repeat', label: ['Repeated value: periods in a row', 'قيمة مكررة: فترات متتالية'], note: ['Identical values for at least this many periods.', 'قيم متطابقة لهذا العدد من الفترات على الأقل.'] },
+  lateDays: { default: 45, options: [30, 45, 60, 90], rule: 't-late-entry', label: ['Late KPI entry: days after period end', 'إدخال متأخر للمؤشر: أيام بعد نهاية الفترة'], note: ['A value entered later than this is flagged.', 'تُنبَّه القيمة المدخلة بعد هذه المدة.'] },
+};
+
+export const DEFAULT_CONFIG = { enabled: {}, params: Object.fromEntries(Object.entries(PARAMS).map(([k, v]) => [k, v.default])) };
+export const isEnabled = (config, ruleId) => config.enabled?.[ruleId] !== false;
+export const normalizeConfig = config => ({ enabled: { ...(config?.enabled || {}) }, params: { ...DEFAULT_CONFIG.params, ...(config?.params || {}) } });
+export const configKey = config => JSON.stringify([Object.entries(normalizeConfig(config).enabled).filter(([, v]) => v === false).map(([k]) => k).sort(), Object.entries(normalizeConfig(config).params).sort()]);
+
+const rule = (id, category, severity, objectType, title, what, fix) => ({ id, category, severity, objectType, title, what, fix });
+
+export const RULES = [
+  rule('c-missing-period', 'completeness', 'medium', 'kpi', ['Missing period value', 'قيمة فترة مفقودة'], ['A monthly KPI period has no value, so charts and trends have a gap. A missing latest period is treated as high severity.', 'فترة شهرية للمؤشر دون قيمة، فتظهر فجوة في الرسوم والاتجاهات. تُعد الفترة الأخيرة المفقودة ذات خطورة مرتفعة.'], ['Ask the KPI owner to enter the value, or record that no value exists for that period.', 'اطلب من مالك المؤشر إدخال القيمة أو تسجيل عدم وجود قيمة لتلك الفترة.']),
+  rule('c-missing-budget', 'completeness', 'high', 'project', ['Missing current budget', 'الميزانية الحالية مفقودة'], ['Cost indices and budget reports cannot be calculated without a current budget.', 'لا يمكن حساب مؤشرات التكلفة وتقارير الميزانية دون ميزانية حالية.'], ['Ask the project manager to enter the approved current budget in Synergy.', 'اطلب من مدير المشروع إدخال الميزانية الحالية المعتمدة في سينرجي.']),
+  rule('c-missing-manager', 'completeness', 'medium', 'project', ['Missing project manager', 'مدير المشروع مفقود'], ['Nobody is accountable for updating this project, so its data is likely to go stale.', 'لا أحد مسؤول عن تحديث هذا المشروع، لذا يُرجَّح أن تتقادم بياناته.'], ['Assign a project manager in Synergy. Until then, EPMO is the contact for this project.', 'عيّن مدير مشروع في سينرجي. وإلى ذلك الحين يكون مكتب إدارة المشاريع جهة الاتصال.']),
+  rule('c-missing-phase', 'completeness', 'low', 'project', ['Missing project phase', 'مرحلة المشروع مفقودة'], ['Phase reports and governance gates depend on the project phase.', 'تعتمد تقارير المراحل وبوابات الحوكمة على مرحلة المشروع.'], ['Set the current phase on the project record.', 'حدّد المرحلة الحالية في سجل المشروع.']),
+  rule('c-missing-start', 'completeness', 'medium', 'project', ['Missing actual start date', 'تاريخ البدء الفعلي مفقود'], ['Start delay (AI) and progress vs plan cannot be calculated without an actual start date.', 'لا يمكن حساب تأخر البدء (AI) والتقدم مقابل الخطة دون تاريخ بدء فعلي.'], ['Enter the actual start date on the project record.', 'أدخل تاريخ البدء الفعلي في سجل المشروع.']),
+  rule('v-percent-range', 'validity', 'high', 'kpi', ['Impossible value', 'قيمة مستحيلة'], ['A percentage KPI is below 0% or above 100%, which cannot be correct and distorts averages and forecasts.', 'مؤشر نسبة أقل من 0% أو أعلى من 100%، وهذا لا يمكن أن يكون صحيحًا ويشوّه المتوسطات والتوقعات.'], ['Check the source and correct the value. Typical causes are a typo or an unrounded calculation.', 'راجع المصدر وصحّح القيمة. من الأسباب المعتادة خطأ إدخال أو حساب غير مقرّب.']),
+  rule('v-scale-100', 'validity', 'high', 'kpi', ['Value off by a factor of ~100', 'قيمة بعامل ~100'], ['The value is about 1/100 of its usual level, which usually means a percentage was entered as a fraction (0.49 instead of 49).', 'القيمة تساوي نحو 1/100 من مستواها المعتاد، وغالبًا أُدخلت نسبة على شكل كسر (0.49 بدل 49).'], ['Multiply by 100 in the source if the unit was entered wrongly, then re-scan.', 'اضرب في 100 في المصدر إذا أُدخلت الوحدة خطأ، ثم أعد الفحص.']),
+  rule('v-ratio-cap', 'validity', 'high', 'project', ['Index ratio above its cap', 'نسبة المؤشر أعلى من حدها'], ['Index ratios are capped at 1.0. A higher ratio inflates the project’s index and its parent aggregates.', 'نسب المؤشرات محدودة بـ 1.0. تضخّم النسبة الأعلى مؤشر المشروع وتجميعاته.'], ['Check the inputs of the ratio and correct them in Synergy.', 'راجع مدخلات النسبة وصحّحها في سينرجي.']),
+  rule('v-planned-over-100', 'validity', 'medium', 'project', ['Planned progress above 100%', 'التقدم المخطط أعلى من 100%'], ['Planned progress cannot exceed 100%, so progress vs plan is wrong for this project.', 'لا يمكن أن يتجاوز التقدم المخطط 100%، لذا يكون التقدم مقابل الخطة خاطئًا لهذا المشروع.'], ['Correct the planned progress or the schedule it is calculated from.', 'صحّح التقدم المخطط أو الجدول الذي يُحسب منه.']),
+  rule('v-stray-chars', 'validity', 'low', 'project', ['Stray characters in project ID', 'أحرف غير مسموحة في معرّف المشروع'], ['The project ID contains characters that are not allowed. Lookups and joins with other systems can fail.', 'يحتوي معرّف المشروع على أحرف غير مسموحة. قد تفشل عمليات البحث والربط مع الأنظمة الأخرى.'], ['Remove the extra characters from the project ID.', 'أزل الأحرف الزائدة من معرّف المشروع.']),
+  rule('s-active-complete', 'consistency', 'medium', 'project', ['Active but 100% complete', 'نشط لكن مكتمل 100%'], ['A project cannot be both active and fully complete. Either its status or its progress is out of date.', 'لا يمكن أن يكون المشروع نشطًا ومكتملًا بالكامل. إما أن حالته أو تقدمه قديم.'], ['Close the project if it is finished, or correct the progress.', 'أغلق المشروع إن كان قد انتهى، أو صحّح التقدم.']),
+  rule('s-notstarted-progress', 'consistency', 'medium', 'project', ['Progress on a not-started project', 'تقدم في مشروع لم يبدأ'], ['Progress is recorded but the status says the project has not started.', 'يوجد تقدم مسجّل لكن الحالة تقول إن المشروع لم يبدأ.'], ['Update the status, or remove the progress if it was entered by mistake.', 'حدّث الحالة، أو أزل التقدم إن أُدخل بالخطأ.']),
+  rule('s-hold-no-resume', 'consistency', 'low', 'project', ['On hold without a resume date', 'متوقف دون تاريخ استئناف'], ['An on-hold project should have an expected resume date so its forecasts and plans stay meaningful.', 'ينبغي أن يكون للمشروع المتوقف تاريخ استئناف متوقع كي تبقى توقعاته وخططه ذات معنى.'], ['Add an expected resume date, or change the status.', 'أضف تاريخ استئناف متوقعًا، أو غيّر الحالة.']),
+  rule('s-dates-order', 'consistency', 'high', 'project', ['End date before start date', 'تاريخ الانتهاء قبل البدء'], ['The schedule is impossible, so every date-based index for this project is wrong.', 'الجدول الزمني مستحيل، لذا تكون كل المؤشرات المبنية على التواريخ خاطئة لهذا المشروع.'], ['Correct the start or end date in Synergy.', 'صحّح تاريخ البدء أو الانتهاء في سينرجي.']),
+  rule('u-dup-period', 'uniqueness', 'medium', 'kpi', ['Two entries for the same period', 'إدخالان لفترة واحدة'], ['A KPI period has more than one value, so reports may pick either one.', 'لفترة المؤشر أكثر من قيمة، فقد تختار التقارير أيًّا منهما.'], ['Keep the correct entry and remove or correct the other one.', 'أبقِ على الإدخال الصحيح وأزل الآخر أو صحّحه.']),
+  rule('t-past-end', 'timeliness', 'medium', 'project', ['Active beyond its end date', 'نشط بعد تاريخ انتهائه'], ['The planned end date has passed but the project is still active. More than 60 days late is treated as high severity.', 'مضى تاريخ الانتهاء المخطط والمشروع لا يزال نشطًا. التأخر أكثر من 60 يومًا يُعد مرتفع الخطورة.'], ['Re-baseline the end date, or close the project if it is finished.', 'أعد تحديد تاريخ الانتهاء، أو أغلق المشروع إن كان قد انتهى.']),
+  rule('t-overdue-resume', 'timeliness', 'medium', 'project', ['Overdue planned resume', 'تجاوز تاريخ الاستئناف المخطط'], ['The planned resume date has passed but the project is still on hold.', 'مضى تاريخ الاستئناف المخطط والمشروع لا يزال متوقفًا.'], ['Update the resume date or the status.', 'حدّث تاريخ الاستئناف أو الحالة.']),
+  rule('t-late-entry', 'timeliness', 'low', 'kpi', ['Late-entered KPI value', 'قيمة مؤشر أُدخلت متأخرة'], ['The value was entered long after its period ended, so earlier reports used a missing or older number.', 'أُدخلت القيمة بعد وقت طويل من انتهاء فترتها، فاستخدمت التقارير السابقة رقمًا مفقودًا أو أقدم.'], ['Ask the owner to enter values within the agreed window.', 'اطلب من المالك إدخال القيم ضمن المدة المتفق عليها.']),
+  rule('x-spike', 'statistical', 'medium', 'kpi', ['Spike or drop', 'قفزة أو هبوط'], ['A single value is far from the previous 6 periods and the next period returns to normal. It may be a typo or a real one-off event.', 'قيمة واحدة بعيدة عن الفترات الـ 6 السابقة ثم تعود الفترة التالية إلى الوضع الطبيعي. قد تكون خطأ إدخال أو حدثًا استثنائيًا حقيقيًا.'], ['Check the source. If it is real, mark the finding as explained with the reason.', 'راجع المصدر. إن كانت حقيقية، حدّد الملاحظة كمبرَّرة مع السبب.']),
+  rule('x-shift', 'statistical', 'medium', 'kpi', ['Sustained level shift', 'تغيّر مستمر في المستوى'], ['The last 3 periods sit well above or below the 6 before, in the same direction. The method or definition may have changed.', 'تقع آخر 3 فترات أعلى أو أدنى بكثير من الـ 6 السابقة وفي الاتجاه نفسه. قد تكون الطريقة أو التعريف قد تغيّرت.'], ['Ask the owner whether the calculation changed. If the change is real, mark it as explained.', 'اسأل المالك إن كان الحساب قد تغيّر. إن كان التغيير حقيقيًا، حدّده كمبرَّر.']),
+  rule('x-repeat', 'statistical', 'low', 'kpi', ['Repeated value', 'قيمة مكررة'], ['The same value appears for several periods in a row, which often means a value was copied forward instead of updated.', 'تظهر القيمة نفسها لعدة فترات متتالية، وغالبًا يعني ذلك نسخ القيمة السابقة بدل تحديثها.'], ['Check that each period has its own measured value.', 'تأكد من أن لكل فترة قيمتها المقاسة.']),
+];
+export const RULE_BY_ID = Object.fromEntries(RULES.map(r => [r.id, r]));

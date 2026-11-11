@@ -1,0 +1,29 @@
+Project Hold demo fixture
+
+Project name: Project Alpha
+Project manager: Afnan Rayyani
+Executor sector: Health
+Project hold date: 2026-11-30
+Expected resumption date: 2026-11-01
+Prepared by: Afnan Rayyani
+Prepared on: 2026-11-11
+Project hold reason: Pause delivery while the external data-sharing agreement is finalized.
+Impact of the hold: Work on data integration pauses. The project team will review the schedule before work resumes.
+Budget review: Budget under review
+Budget justification: Confirm vendor costs during the hold.
+Schedule review: Delivery paused
+Schedule justification: Rebaseline after the agreement is signed.
+Deliverables review: Integration deliverables paused
+Deliverables justification: Awaiting access to source data.
+Risks review: Dependency risk remains open
+Risks justification: Track the data-sharing agreement weekly.
+Issues review: External agreement pending
+Issues justification: Legal review is in progress.
+Sponsor approver: Demo sponsor
+Sponsor approval date: 2026-11-30
+Executor P&Q approver: Demo executor
+Executor P&Q approval date: 2026-11-30
+Contributor P&Q approver: Demo contributor
+Contributor P&Q approval date: 2026-11-30
+Strategic Planning approver: 
+Strategic Planning approval date: 
