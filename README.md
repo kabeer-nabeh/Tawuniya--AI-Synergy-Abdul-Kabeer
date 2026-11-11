@@ -116,9 +116,10 @@ Chat responses and business values are illustrative examples. The artifact edito
 - `src/quality-engine.js`: deterministic detection with computed reasons and evidence, scan comparison and priority ranking.
 - `src/quality-view.js`: Data quality page, finding detail, rules panel, AI summary and the assistant explanation.
 - `tests/quality-engine.test.js`: detection, configuration, scan comparison, scope and capability checks.
+- `public/synergy-epmo-background.png`: retained historical reference asset, no longer rendered.
 - `src/styles.css`: design tokens, local font definitions, responsive layouts and component states.
 - `public/`: original supplied logo and three font weights.
-- `server.mjs`: dependency-free local static server.
+- `dev-server.mjs`: dependency-free local static server.
 
 ## Project Hold validator, 11 November 2026
 
