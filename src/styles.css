@@ -1811,6 +1811,9 @@ button.fc-driver-row:not(:disabled) .fc-driver-count{color:var(--brand)}
 .sso-product { margin:0 0 6px;color:var(--brand);font-size:12px;font-weight:700 }
 .sso-card h1 { margin:0;font-size:26px;line-height:1.22;letter-spacing:-.02em }
 .sso-intro { margin:10px 0 23px;color:var(--muted);line-height:1.6 }
+.sso-credit { margin-block-start:18px;padding-block-start:12px;border-block-start:1px solid var(--line);color:var(--muted);font-size:12px;line-height:1.6 }
+.sso-credit p { margin:0 }
+.sso-credit strong { color:var(--text) }
 .sso-continue { display:flex;justify-content:center;width:100%;min-height:44px }
 .sso-message { display:none;margin:0 0 16px;padding:11px 12px;border-radius:6px;background:var(--warning-soft);color:var(--warning);line-height:1.5 }
 .sso-message:target { display:block }

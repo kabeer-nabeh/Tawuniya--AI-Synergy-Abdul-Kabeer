@@ -67,6 +67,9 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 60px); line-height: 1.04; letter-spa
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .demo-access-card .demo-error { display: none; color: #962d36; margin: 0 0 14px; }
 .demo-access-card .demo-error:target { display: block; }
+.demo-credit { margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line); }
+.demo-access-card .demo-credit p { margin: 0; font-size: 13px; }
+.demo-credit strong { color: #211c2d; }
 @media (max-width: 700px) {
   .demo-layout { grid-template-columns: minmax(0, 1fr); width: min(100% - 32px, 500px); gap: 24px; }
   .demo-intro { margin-bottom: 16px; }
