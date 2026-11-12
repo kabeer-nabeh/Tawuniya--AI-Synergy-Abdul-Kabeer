@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#6b47f5" />
+    <title>Sign in · Tawuniya AI Synergy</title>
+    <link rel="icon" href="/public/tawuniya-logo.png" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="sso-page">
+    <main class="sso-card" aria-label="AI Synergy sign-in">
+      <img class="sso-logo" src="/public/tawuniya-logo.png" width="363" height="109" alt="Tawuniya · التعاونية" />
+      <p class="sso-product">AI Synergy</p>
+      <section id="sso-intro-view">
+        <h1>Sign in with your Tawuniya account</h1>
+        <p class="sso-intro">Choose a demo account to preview the AI Synergy workspace.</p>
+        <p id="sso-unavailable" class="sso-message" role="status" tabindex="-1">Tawuniya SSO is unavailable. You can continue with a demo account.</p>
+        <button id="sso-continue" type="button" class="primary-button sso-continue">Continue with Tawuniya SSO</button>
+      </section>
+      <section id="sso-account-picker" aria-labelledby="sso-picker-title" hidden>
+        <h1 id="sso-picker-title" tabindex="-1">Choose a demo account</h1>
+        <p class="sso-intro">Select a role and project scope to open the workspace.</p>
+        <div id="sso-account-options" class="account-options"></div>
+        <button id="sso-back" type="button" class="text-button sso-back">Back to sign-in</button>
+      </section>
+    </main>
+    <script type="module" src="/src/sign-in.js"></script>
+  </body>
+</html>

@@ -95,8 +95,7 @@ export function documentValidatorUI({t,icon,escape,documents,validator,definitio
     };
     return `<section class="dv-page" aria-labelledby="validator-heading">
       <header class="dv-page-heading">
-        <div><h1 id="validator-heading">${t('AI Document Validator','التحقق الذكي من المستندات')}</h1><p>${t('Check a document against a demo template and review the findings.','افحص مستندًا مقابل نموذج تجريبي وراجع النتائج.')}</p></div>
-        ${canCreate?`<button class="secondary-button" data-action="document-mode" data-mode="create">${icon('edit')}${t('Create document','إنشاء مستند')}</button>`:''}
+        <div><h1 id="validator-heading">${t('Validate a document','التحقق من مستند')}</h1><p>${t('Check a document against a demo template and review the findings.','افحص مستندًا مقابل نموذج تجريبي وراجع النتائج.')}</p></div>
       </header>
       <div class="dv-intake">
         ${documentUploadUI({t,icon,escape,validator,projects})}

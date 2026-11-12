@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <meta name="theme-color" content="#f7f6fa">
+    <title>AI Synergy Demo · Tawuniya</title>
+    <link rel="icon" href="/public/tawuniya-logo.png">
+    <link rel="stylesheet" href="/demo.css">
+  </head>
+  <body>
+    <main class="demo-layout">
+      <header class="demo-brand">
+        <img src="/public/tawuniya-logo.png" alt="Tawuniya" width="363" height="109">
+      </header>
+      <section class="demo-overview" aria-labelledby="demo-title">
+        <p class="demo-label">Frontend demo</p>
+        <h1 id="demo-title">AI Synergy</h1>
+        <p class="demo-intro">Explore how AI features could support Tawuniya’s project teams inside Synergy. This interactive prototype uses dummy content and sample accounts.</p>
+        <dl class="demo-features">
+          <div><dt>AI Assistance</dt><dd>Ask questions about sample projects and performance measures.</dd></div>
+          <div><dt>Document Validator</dt><dd>Check sample documents against demo templates and review findings.</dd></div>
+          <div><dt>Forecasts</dt><dd>Explore projected results and compare what-if scenarios.</dd></div>
+          <div><dt>Data Quality</dt><dd>Review example issues in project and KPI records.</dd></div>
+        </dl>
+      </section>
+      <section class="demo-access-card" aria-labelledby="access-title">
+        <h2 id="access-title">Access the demo</h2>
+        <p>Enter the passcode shared by the project team.</p>
+        <p class="demo-error" id="passcode-error" role="alert" tabindex="-1">That passcode didn’t match. Try again.</p>
+        <p class="demo-error" id="passcode-unavailable" role="alert" tabindex="-1">Demo access hasn’t been configured. Contact the project team.</p>
+        <form method="post" action="/demo-access">
+          <label for="passcode">Passcode</label>
+          <input id="passcode" name="passcode" type="password" autocomplete="current-password" required maxlength="256">
+          <button type="submit">Open AI Synergy <span aria-hidden="true">→</span></button>
+        </form>
+      </section>
+    </main>
+  </body>
+</html>

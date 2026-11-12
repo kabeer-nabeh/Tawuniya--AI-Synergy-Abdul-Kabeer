@@ -9,11 +9,17 @@ import { workspaceIcons } from '../public/vendor/hugeicons/workspace-icons.js';
 import { freshValidator, validatorDocument, checkDocument, saveDocument, documentValidatorUI, addUploadedDocument } from './document-validator.js';
 import { emptyUpload, readUploadSelection, removeUploadFile, uploadSetup, resolvedUploadTemplate } from './document-upload.js';
 import { forecastUI, freshForecast, MAX_SCENARIOS } from './forecast-view.js';
+import { freshAuthoring, createDraft, pendingField, answerField, skipField, editField, parseTyped, commandOf, fieldOf, templateOf as authoringTemplate, validatorFields, isComplete as authoringComplete } from './document-create.js';
+import { authoringUI } from './document-create-view.js';
+import { AUTHORING_TEMPLATES as AUTHORING_LIST } from './document-create.js';
 import { qualityUI, freshQuality, PAGE_STEP } from './quality-view.js';
 import { DEFAULT_CONFIG, normalizeConfig } from './quality-rules.js';
 
 const icons = {
   ...workspaceIcons,
+  left: '<path d="M19 12H5m6 6-6-6 6-6"/>',
+  download: '<path d="M12 4v11m-5-5 5 5 5-5M5 20h14"/>',
+  'sign-out': '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 17l-5-5 5-5M5 12h11"/>',
   'document-check': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6m-12 7 3 3 5-6"/>',
   settings: '<path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/><path d="m9 3-.7 2.2-2 .9L4 5.5 2 9l1.7 1.6v2.8L2 15l2 3.5 2.3-.6 2 .9L9 21h4l.7-2.2 2-.9 2.3.6 2-3.5-1.7-1.6v-2.8L20 9l-2-3.5-2.3.6-2-.9L13 3Z"/>',
   expand: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5M3 3l6 6m6 6 6 6M21 3l-6 6M9 15l-6 6"/>',
@@ -50,9 +56,21 @@ const icon = (name, cls = '') => name === 'assistant'
 const escape = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let lang = 'en';
 const t = (en, ar) => lang === 'ar' ? ar : en;
-const state = { hostTab:'overview',panelSurface:'host',assistance:freshAssistance(), accountId:'epmo',activeView:'assistant',documentMode:'validate',viewScroll:{}, chatView:'closed', chatDraft:'', chatScroll:0, unread:false, conversations: [], active: null, busy: false, drawer: null, source: null, attachment: null, mobile: false, generation: 0, feedback: new Set() };
+const entryUrl = new URL(location.href);
+const embeddedWorkspace = window.parent !== window && entryUrl.searchParams.get('embed') === 'synergy';
+const selectedDemoAccount = getAccount(entryUrl.searchParams.get('demoAccount'));
+if (entryUrl.searchParams.has('demoAccount')) {
+  entryUrl.searchParams.delete('demoAccount');
+  history.replaceState(null, '', entryUrl);
+}
+const state = { hostTab:!embeddedWorkspace&&selectedDemoAccount?'synergy':'overview',panelSurface:'host',assistance:freshAssistance(), accountId:selectedDemoAccount?.id||'epmo',activeView:'assistant',documentMode:'validate',viewScroll:{}, chatView:'closed', chatDraft:'', chatScroll:0, unread:false, conversations: [], active: null, busy: false, drawer: null, source: null, attachment: null, mobile: false, generation: 0, feedback: new Set() };
 let returnFocus = null;
 const app = document.querySelector('#app');
+const frameOrigin = location.origin;
+let workspaceFrame;
+let pendingFrameView;
+let workspaceFrameReady = false;
+let receivedHostContext = false;
 const active = () => state.conversations.find(c => c.id === state.active);
 const mark = () => `<span class="assistant-mark">${icon('assistant')}</span>`;
 const account = () => getAccount(state.accountId);
@@ -60,6 +78,7 @@ const allowed = capability => can(account(),capability);
 const documentsForAccount = () => templates.filter(doc=>documentIdsFor(account()).includes(doc.id));
 state.validator=freshValidator();
 state.forecast=freshForecast();
+state.authoring=freshAuthoring();
 const forecast=()=>forecastUI({t,icon,escape,account:account(),fc:state.forecast});
 state.quality=freshQuality();
 const quality=()=>qualityUI({t,icon,escape,account:account(),q:state.quality});
@@ -67,8 +86,8 @@ const validatorDocumentsForAccount=()=>!allowed('validate')?[]:[...state.validat
 const validatorPage=()=>documentValidatorUI({t,icon,escape,documents:validatorDocumentsForAccount(),validator:state.validator,definitions:reviewDefinitions,canCreate:allowed('create'),projects:projectsFor(account())});
 const foundation = () => foundationUI({t,icon,escape,account:account(),state,validationPicker,documentValidator:validatorPage});
 const accountSessions = new Map();
-const sessionKeys=['forecast','quality','validator','assistance','activeView','documentMode','viewScroll','chatDraft','chatScroll','unread','conversations','active','attachment','feedback','editDrafts','editor','openDetails','reviewEvidence'];
-function freshSession(){return {forecast:freshForecast(),quality:freshQuality(),validator:freshValidator(),assistance:freshAssistance(),activeView:'assistant',documentMode:'validate',viewScroll:{},chatDraft:'',chatScroll:0,unread:false,conversations:[],active:null,attachment:null,feedback:new Set(),editDrafts:{},editor:null,openDetails:[],reviewEvidence:null};}
+const sessionKeys=['authoring','forecast','quality','validator','assistance','activeView','documentMode','viewScroll','chatDraft','chatScroll','unread','conversations','active','attachment','feedback','editDrafts','editor','openDetails','reviewEvidence'];
+function freshSession(){return {authoring:freshAuthoring(),forecast:freshForecast(),quality:freshQuality(),validator:freshValidator(),assistance:freshAssistance(),activeView:'assistant',documentMode:'validate',viewScroll:{},chatDraft:'',chatScroll:0,unread:false,conversations:[],active:null,attachment:null,feedback:new Set(),editDrafts:{},editor:null,openDetails:[],reviewEvidence:null};}
 function captureWorkspace(){
   const floatingInput=document.querySelector('#assistance-message');if(floatingInput)state.assistance.draft=floatingInput.value;
   const floatingMain=document.querySelector('#assistance-messages');if(floatingMain)state.assistance.scroll=floatingMain.scrollTop;
@@ -93,6 +112,10 @@ function switchAccount(id){
 }
 function navigate(view){
   if(!allowed(view))return;
+  if(!embeddedWorkspace){
+    openWorkspaceInFrame(view);
+    return;
+  }
   captureWorkspace();state.activeView=view;state.hostTab='synergy';state.drawer=null;state.mobile=false;
   if(view==='assistant')state.unread=false;
   render({capture:false});document.querySelector('#main')?.focus();
@@ -326,13 +349,14 @@ function overlay() {
   else if(state.drawer==='history') content=`<p class="inspector-intro">${t('Pick up where you left off. Conversations stay available during this session.','تابع من حيث توقفت. تبقى المحادثات متاحة خلال هذه الجلسة.')}</p><button class="secondary-button" data-action="new">${icon('plus')}${t('New conversation','محادثة جديدة')}</button><div class="chat-history-list">${state.conversations.length?state.conversations.slice().reverse().map(c=>`<button class="history-entry ${c.id===state.active&&state.activeView==='assistant'?'current':''}" data-action="history" data-id="${c.id}">${icon('chat')}<span>${escape(c.title)}</span>${icon('chevron')}</button>`).join(''):`<div class="history-empty">${icon('history')}<h3>${t('A fresh start','بداية جديدة')}</h3><p>${t('Your conversations will appear here after you send a message.','ستظهر محادثاتك هنا بعد إرسال رسالة.')}</p></div>`}</div>`;
   else if(state.drawer==='editor') content=artifactEditor();
   else if(state.drawer==='review-evidence') content=reviewEvidence(state.reviewEvidence);
+  else if(state.drawer==='create-preview') content=authoring().preview();
   else if(state.drawer==='help') content=`<div class="about-symbol">${mark()}</div><h3>${t('A clearer view of your work','رؤية أوضح لعملك')}</h3><p>${t('Ask about projects and KPIs, summarize documents, or review an artifact against its template.','اسأل عن المشاريع ومؤشرات الأداء، أو لخّص المستندات، أو راجع مستندًا مقابل نموذجه.')}</p><div class="inspector-note"><p><strong>${t('Interactive design prototype','نموذج تصميم تفاعلي')}</strong><br>${t('Chat answers use sample records. Artifact checks use the fields you edit in this session. There is no live Synergy connection, AI inference, authentication, or persistent storage. Reloading clears the session.','تعتمد إجابات المحادثة على سجلات تجريبية، وتفحص مراجعة المستند الحقول التي تعدّلها في هذه الجلسة. لا يوجد اتصال فعلي بسينرجي أو نموذج ذكاء اصطناعي أو مصادقة أو تخزين دائم. تُمسح الجلسة عند إعادة التحميل.')}</p></div><p>${t('Automated checks support human decisions. They do not approve documents or change source records.','تدعم الفحوصات الآلية القرارات البشرية، ولا تعتمد المستندات أو تغيّر السجلات الأصلية.')}</p>`;
   else {
     const source=state.source;
     content=`<span class="sample-label">${t('SAMPLE EVIDENCE','دليل تجريبي')}</span><h3>${source==='kpi'?t('On-time milestone delivery','تسليم المراحل في موعدها'):source==='artifact'?t('Governance & Performance','الحوكمة والأداء'):t('Project Alpha','مشروع ألفا')}</h3><dl class="source-metadata"><div><dt>${t('Source','المصدر')}</dt><dd>${t('Illustrative Synergy record','سجل سينرجي توضيحي')}</dd></div><div><dt>${t('Reporting period','فترة التقرير')}</dt><dd>${t('Q3 · July–September 2026','الربع الثالث · يوليو–سبتمبر 2026')}</dd></div><div><dt>${t('Snapshot','النسخة المرجعية')}</dt><dd dir="ltr">DEMO-UC01-001</dd></div><div><dt>${t('Record type','نوع السجل')}</dt><dd>${source==='artifact'?t('Template v1.0','النموذج 1.0'):t('Performance record','سجل أداء')}</dd></div></dl><h4>${t('Supporting information','المعلومات الداعمة')}</h4><div class="evidence">${source==='kpi'?`<p>${t('Definition: milestones delivered on time ÷ total milestones due × 100.','التعريف: المراحل المسلّمة في موعدها ÷ إجمالي المراحل المستحقة × 100.')}</p><p>${t('Sample actual: 7 ÷ 10 × 100 = 70%. Target: 80%. Gap: −10 percentage points.','القيمة التجريبية: 7 ÷ 10 × 100 = 70%. المستهدف: 80%. الفجوة: −10 نقاط مئوية.')}</p>`:source==='artifact'?`<p>${t('§1: reporting period must include start and end dates. In the sample document, this field is blank.','§1: يجب أن تتضمن فترة التقرير تاريخي البداية والنهاية. هذا الحقل فارغ في المستند التجريبي.')}</p><p>${t('§3: an accountable owner is required. The sample document contains no owner.','§3: يلزم تحديد مالك مسؤول. لا يتضمن المستند التجريبي اسم مالك.')}</p><p>${t('§5: next-step due dates are recommended, not required.','§5: يوصى بإضافة مواعيد للخطوات التالية، لكنها ليست مطلوبة.')}</p>`:`<p>${t('Actual progress: 68%. Planned progress: 75%. Completed milestones: 7 of 10; planned: 8 of 10. Budget utilization: 62%; planned: 65%.','الإنجاز الفعلي: 68%. المخطط: 75%. المراحل المكتملة: 7 من 10؛ المخطط: 8 من 10. استخدام الميزانية: 62%؛ المخطط: 65%.')}</p><p>${t('Integration testing: planned completion 24 Sep 2026. Still open on 30 Sep. Dependency: vendor environment availability. Revised date: not recorded.','اختبار التكامل: تاريخ الإكمال المخطط 24 سبتمبر 2026. ظل مفتوحًا في 30 سبتمبر. الاعتمادية: جاهزية بيئة المورد. لم يُسجل تاريخ معدّل.')}</p>`}</div><p class="small-copy">${t('This is an inspectable sample snapshot, not a live Corporater record.','هذه نسخة تجريبية قابلة للفحص وليست سجلًا فعليًا في كوربورايتر.')}</p>`;
   }
   if(state.drawer==='help') content += `<p class="icon-credit"><a href="https://thenounproject.com/icon/ai-7087218/" target="_blank" rel="noopener noreferrer">${t('AI icon by Slash from Noun Project','أيقونة الذكاء الاصطناعي من تصميم Slash على Noun Project')}</a></p>`;
-  return `<div class="overlay-backdrop" data-action="close-panel"></div><aside class="inspector ${state.drawer==='editor'?'artifact-inspector':state.drawer==='validation'?'validation-inspector':state.drawer==='accounts'?'account-inspector':state.drawer==='forecast-project'?'forecast-inspector':state.drawer==='forecast-alerts'?'forecast-alerts-inspector':state.drawer==='quality-finding'||state.drawer==='quality-rules'?'quality-inspector':''}" data-panel="${state.drawer}" role="dialog" aria-modal="true" aria-labelledby="panel-title"><div class="inspector-header"><h2 id="panel-title">${state.drawer==='platform-menu'?t('Platform navigation','تنقل المنصة'):state.drawer==='accounts'?t('Switch demo account','تبديل الحساب التجريبي'):state.drawer==='project-context'?t('Project context','سياق المشروع'):state.drawer==='forecast-project'?t('Project forecast','توقع المشروع'):state.drawer==='forecast-alerts'?t('Early-warning rules','قواعد الإنذار المبكر'):state.drawer==='quality-finding'?t('Finding','ملاحظة'):state.drawer==='quality-rules'?t('Data-quality rules','قواعد جودة البيانات'):state.drawer==='validation'?t('Validate a document','التحقق من مستند'):state.drawer==='documents'?t('Sample documents','مستندات تجريبية'):state.drawer==='help'?t('About this assistant','حول هذا المساعد'):state.drawer==='history'?t('Conversations','المحادثات'):state.drawer==='editor'?t('Edit sample document','تعديل المستند التجريبي'):t('Source details','تفاصيل المصدر')}</h2><button class="icon-button" data-action="close-panel" aria-label="${t('Close panel','إغلاق اللوحة')}">${icon('close')}</button></div><div class="inspector-content">${content}</div></aside>`;
+  return `<div class="overlay-backdrop" data-action="close-panel"></div><aside class="inspector ${state.drawer==='create-preview'?'create-preview-inspector':state.drawer==='editor'?'artifact-inspector':state.drawer==='validation'?'validation-inspector':state.drawer==='accounts'?'account-inspector':state.drawer==='forecast-project'?'forecast-inspector':state.drawer==='forecast-alerts'?'forecast-alerts-inspector':state.drawer==='quality-finding'||state.drawer==='quality-rules'?'quality-inspector':''}" data-panel="${state.drawer}" role="dialog" aria-modal="true" aria-labelledby="panel-title"><div class="inspector-header"><h2 id="panel-title">${state.drawer==='create-preview'?t('Document preview','معاينة المستند'):state.drawer==='platform-menu'?t('Platform navigation','تنقل المنصة'):state.drawer==='accounts'?t('Switch demo account','تبديل الحساب التجريبي'):state.drawer==='project-context'?t('Project context','سياق المشروع'):state.drawer==='forecast-project'?t('Project forecast','توقع المشروع'):state.drawer==='forecast-alerts'?t('Early-warning rules','قواعد الإنذار المبكر'):state.drawer==='quality-finding'?t('Finding','ملاحظة'):state.drawer==='quality-rules'?t('Data-quality rules','قواعد جودة البيانات'):state.drawer==='validation'?t('Validate a document','التحقق من مستند'):state.drawer==='documents'?t('Sample documents','مستندات تجريبية'):state.drawer==='help'?t('About this assistant','حول هذا المساعد'):state.drawer==='history'?t('Conversations','المحادثات'):state.drawer==='editor'?t('Edit sample document','تعديل المستند التجريبي'):t('Source details','تفاصيل المصدر')}</h2><button class="icon-button" data-action="close-panel" aria-label="${t('Close panel','إغلاق اللوحة')}">${icon('close')}</button></div><div class="inspector-content">${content}</div></aside>`;
 }
 
 function languageControl() {
@@ -342,13 +366,98 @@ function aiWorkspace() {
   const assistant=state.activeView==='assistant';
   const assistanceOpen=state.chatView!=='closed';
   const assistantPage=assistanceOpen?`<div class="assistant-elsewhere">${mark()}<h2>${t('AI Assistance is open','المساعدة الذكية مفتوحة')}</h2><p>${t('Your chat is available in the assistance panel. Close it to continue working here.','محادثتك متاحة في لوحة المساعدة. أغلقها لمتابعة العمل هنا.')}</p><button class="secondary-button" data-action="chat-close">${icon('chat')}${t('Return to workspace assistant','العودة إلى مساعد مساحة العمل')}</button></div>`:active()?messages():welcome();
-  const page=assistant?assistantPage:state.activeView==='documents'?foundation().documentsPage():state.activeView==='forecasts'?forecast().page():state.activeView==='quality'?quality().page():state.activeView==='admin'?foundation().adminPage():foundation().overviewPage(state.activeView);
-  return `<section class="embedded-ai-workspace" aria-label="${t('AI Synergy workspace','مساحة عمل AI Synergy')}"><header class="embedded-ai-heading">${foundation().navigation()}<span class="scope-tag">${icon('briefcase')}${foundation().scope}</span>${assistant?`<button class="icon-button" data-action="chat-history" aria-label="${t('Workspace conversations','محادثات مساحة العمل')}">${icon('history')}</button>`:''}</header><div class="embedded-ai-body">${assistant?sidebar():''}<div id="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-${state.activeView}" class="workspace ${active()?'has-conversation':''} ${assistant?'assistant-workspace':'task-workspace'}"><main id="main" tabindex="-1" data-view="${state.activeView}">${page}</main>${assistant&&active()&&!assistanceOpen?`<div class="conversation-composer">${composer()}</div>`:''}</div></div></section>`;
+  const page=assistant?assistantPage:state.activeView==='documents'?(state.documentMode==='create'&&allowed('create')?authoring().page():foundation().documentsPage()):state.activeView==='forecasts'?forecast().page():state.activeView==='quality'?quality().page():state.activeView==='admin'?foundation().adminPage():foundation().overviewPage(state.activeView);
+  const shell=assistant||state.activeView==='documents';
+  return `<section class="embedded-ai-workspace" aria-label="${t('AI Synergy workspace','مساحة عمل AI Synergy')}"><header class="embedded-ai-heading">${foundation().navigation()}<span class="scope-tag">${icon('briefcase')}${foundation().scope}</span>${embeddedWorkspace?`<button class="sign-out-button" data-action="sign-out" title="${t('Sign out of AI Synergy','تسجيل الخروج من AI Synergy')}">${icon('sign-out')}<span>${t('Sign out','تسجيل الخروج')}</span></button>`:''}</header><div class="embedded-ai-body">${shell?sidebar():''}<div id="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-${shell?'assistant':state.activeView}" class="workspace ${assistant&&active()?'has-conversation':''} ${assistant?'assistant-workspace':'task-workspace'}">${shell?foundation().taskSwitch():''}<main id="main" tabindex="-1" data-view="${state.activeView}">${page}</main>${assistant&&active()&&!assistanceOpen?`<div class="conversation-composer">${composer()}</div>`:''}</div></div></section>`;
+}
+// ---------- Create a document (guided conversation) ----------
+const authoring=()=>authoringUI({t,icon,escape,mark,a:state.authoring,projects:allowed('create')?projectsFor(account()):[],typing:state.authoringTyping});
+function acScroll(){const main=document.querySelector('#main');if(main)main.scrollTop=main.scrollHeight;}
+function acFocus(){const current=document.querySelector('.ac-msg.is-current');const field=current&&pendingField(authoring().active()||{});const target=field&&['text'].includes(field.type)?document.querySelector('#ac-message'):current?.querySelector('input,select,button.ac-option,button.primary-button')||document.querySelector('.ac-msg.is-ready .primary-button')||document.querySelector('#ac-message');target?.focus({preventScroll:true});}
+function acAfter(ok,typing=true){
+  if(!ok||!typing){render();acScroll();acFocus();return;}
+  const id=state.authoring.active,account=state.accountId;state.authoringTyping=true;render();acScroll();
+  setTimeout(()=>{state.authoringTyping=false;if(state.accountId!==account||state.authoring.active!==id)return;render();acScroll();acFocus();},450);
+}
+function acAnswer(value){const draft=authoring().active(),field=draft&&pendingField(draft);if(!field||state.authoringTyping)return;acAfter(answerField(draft,field.id,value));}
+function acSend(){
+  const a=state.authoring,draft=authoring().active(),text=(a.composer||'').trim();
+  if(!draft||!text||state.authoringTyping)return;
+  a.composer='';
+  const cmd=commandOf(draft,text),pending=pendingField(draft);
+  if(cmd?.type==='skip'){if(pending)acAfter(skipField(draft,pending.id));else acAfter(false);return;}
+  if(cmd?.type==='edit'){editField(draft,cmd.fieldId);acAfter(true,false);return;}
+  if(cmd?.type==='edit-unknown'){draft.notice=['I couldn’t find that part. Use a name from the outline, for example “edit deliverables”.','لم أجد هذا الجزء. استخدم اسمًا من المخطط.'];acAfter(false);return;}
+  if(!pending){draft.notice=['Your document is ready. To change a part, use Edit in the outline or type “edit” and the part name.','مستندك جاهز. لتغيير جزء استخدم تعديل في المخطط أو اكتب “تعديل” واسم الجزء.'];acAfter(false);return;}
+  const value=parseTyped(pending,text);
+  const ok=answerField(draft,pending.id,value);
+  if(!ok&&pending.type==='table')draft.table=value;
+  if(!ok&&pending.type!=='table')a.composer=text;
+  acAfter(ok);
+}
+function acDownload(){
+  const file=authoring().download();if(!file)return;
+  const url=URL.createObjectURL(new Blob([file.content],{type:'application/msword'}));
+  const link=Object.assign(document.createElement('a'),{href:url,download:file.filename});document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  toast(t('Document downloaded.','تم تنزيل المستند.'));
+}
+function acValidate(){
+  const ui=authoring(),draft=ui.active();if(!draft||!authoringComplete(draft)||!allowed('validate'))return;
+  const tpl=authoringTemplate(draft.templateId),project=ui.projectOf(draft.projectId);if(!tpl.validatorTemplate)return;
+  const file=ui.download(),fields=validatorFields(draft,project);
+  const text=`${tpl.name[0]}\n${project.name[0]}\nReporting period: ${fields.start} to ${fields.end}\nOwner: ${fields.owner}\nNext action: ${fields.nextAction}\nDue: ${fields.nextDue}`;
+  const id='upload-'+crypto.randomUUID();
+  addUploadedDocument(state.validator,{name:file.filename,size:file.content.length,extension:'doc',text,pages:1,fields},tpl.validatorTemplate,id,project);
+  state.drawer=null;state.documentMode='validate';runStandaloneValidation(id);
+}
+
+// AI Assistance follows the AI Synergy page the user is on: its welcome offers questions about that page.
+const DOC_TOPICS={
+  checks:[['What does the validator check?','ماذا يفحص المدقق؟'],'shield'],
+  formats:[['Which files can I upload?','ما الملفات التي يمكنني رفعها؟'],'upload'],
+  resolve:[['How do I resolve a finding?','كيف أعالج ملاحظة؟'],'check-circle'],
+  types:[['Which documents can I create?','ما المستندات التي يمكنني إنشاؤها؟'],'document'],
+  steps:[['How does guided authoring work?','كيف يعمل التأليف الموجّه؟'],'edit'],
+};
+const docTopics=keys=>keys.map(key=>['doc-topic:'+key,DOC_TOPICS[key][1],t(...DOC_TOPICS[key][0])]);
+function assistContext(){
+  const view=state.activeView;
+  if(view==='forecasts'&&allowed('forecasts')){
+    const fc=forecast(),selected=state.drawer==='forecast-project'&&state.forecast.selected&&fc.inScope(state.forecast.selected)?state.forecast.selected:null;
+    return {label:selected?t(`Forecasts · ${fc.projectName(selected)}`,`التوقعات · ${fc.projectName(selected)}`):t('Forecasts','التوقعات'),icon:'chart',intro:t('Ask about the forecast you are looking at: which projects need attention, what changed and what is driving it.','اسأل عن التوقعات المعروضة: المشاريع التي تحتاج إلى متابعة وما الذي تغيّر وما الذي يؤثر فيها.'),starters:[...(selected?[['forecast-why:'+selected,'chart',fc.whyQuestion(selected)]]:[]),...fc.topics()]};
+  }
+  if(view==='quality'&&allowed('quality')){
+    const dq=quality(),key=state.drawer==='quality-finding'?state.quality.selected:null,finding=key&&dq.ctx.all.find(f=>f.key===key);
+    return {label:t('Data quality','جودة البيانات'),icon:'shield',intro:t('Ask about the latest scan: what to fix first, what changed and which checks fail most.','اسأل عن آخر فحص: ما الذي يجب معالجته أولًا وما الذي تغيّر وما الفحوصات الأكثر فشلًا.'),starters:[...(finding?[['quality-why:'+key,'help',dq.whyQuestion(key)]]:[]),...dq.topics()]};
+  }
+  if(view==='documents'&&state.documentMode==='create'&&allowed('create'))return {label:t('Create a document','إنشاء مستند'),icon:'edit',intro:t('Ask how to prepare a project document for review.','اسأل عن كيفية إعداد مستند مشروع للمراجعة.'),starters:docTopics(['types','steps'])};
+  if(view==='documents'&&allowed('validate'))return {label:t('Validate a document','التحقق من مستند'),icon:'shield',intro:t('Ask about checking a document against its template.','اسأل عن فحص مستند مقابل نموذجه.'),starters:docTopics(['checks','formats','resolve'])};
+  return null;
+}
+function docTopicResponse(key){
+  const meta=`<div class="response-meta">${t('DOCUMENTS','المستندات')}<span>${t('Prototype guidance','إرشاد النموذج التجريبي')}</span></div>`;
+  const go=(mode,label)=>`<button class="secondary-button" data-action="assistant-task" data-task="${mode}">${icon(mode==='create'?'edit':'shield')}${label}</button>`;
+  if(key==='checks')return `${meta}<h2>${t('What the validator checks','ما يفحصه المدقق')}</h2><p>${t('Each document is compared with its template. In this demo it checks:','تتم مقارنة كل مستند بنموذجه. في هذا العرض يفحص:')}</p><ul><li>${t('<strong>Required:</strong> the reporting period and the accountable owner.','<strong>مطلوب:</strong> فترة التقرير والمالك المسؤول.')}</li><li>${t('<strong>Suggested:</strong> a next action with a due date.','<strong>مقترح:</strong> إجراء تالٍ مع موعد نهائي.')}</li><li>${t('<strong>Project Hold:</strong> the hold reason, dates and approvals in the template.','<strong>تعليق المشروع:</strong> سبب التعليق والتواريخ والموافقات الواردة في النموذج.')}</li></ul><p>${t('Results support a human reviewer. They do not approve the document.','تدعم النتائج المراجع البشري ولا تعتمد المستند.')}</p>${go('validate',t('Validate a document','التحقق من مستند'))}`;
+  if(key==='formats')return `${meta}<h2>${t('Files you can upload','الملفات التي يمكنك رفعها')}</h2><p>${t('PDF, Word (.docx), TXT or Markdown, up to 10 MB. Files are read in your browser and are not sent to Synergy in this demo. Choose a template, or let it be detected automatically.','PDF أو Word (.docx) أو TXT أو Markdown بحجم يصل إلى 10 ميغابايت. تُقرأ الملفات في متصفحك ولا تُرسل إلى سينرجي في هذا العرض. اختر نموذجًا أو اتركه يُكتشف تلقائيًا.')}</p>${go('validate',t('Upload a document','رفع مستند'))}`;
+  if(key==='resolve')return `${meta}<h2>${t('Resolving a finding','معالجة ملاحظة')}</h2><ol><li>${t('Open the report and expand the finding to see what is missing.','افتح التقرير ووسّع الملاحظة لمعرفة الناقص.')}</li><li>${t('Select <strong>Edit document</strong> and correct the field.','اختر <strong>تعديل المستند</strong> وصحّح الحقل.')}</li><li>${t('Select <strong>Recheck</strong>. Resolved findings move to passed.','اختر <strong>إعادة الفحص</strong>. تنتقل الملاحظات المعالجة إلى المجتازة.')}</li></ol>`;
+  if(key==='types')return `${meta}<h2>${t('Documents you can create','المستندات التي يمكنك إنشاؤها')}</h2><ul>${AUTHORING_LIST.map(tpl=>`<li><strong>${t(...tpl.name)}</strong> (${tpl.format}): ${t(...tpl.purpose)}</li>`).join('')}</ul><p>${t('Each one is created for a project assigned to you, using the approved template.','يُنشأ كل منها لمشروع مسند إليك باستخدام النموذج المعتمد.')}</p>${go('create',t('Create a document','إنشاء مستند'))}`;
+  return `${meta}<h2>${t('How creating a document works','كيف يعمل إنشاء المستند')}</h2><ol><li>${t('Pick a template and one of your projects.','اختر نموذجًا وأحد مشاريعك.')}</li><li>${t('I fill in what Synergy knows, then ask for the rest one part at a time. Skip optional parts, and change any answer from the outline.','أملأ ما تعرفه سينرجي ثم أسألك عن الباقي جزءًا بعد جزء. تخطَّ الأجزاء الاختيارية وغيّر أي إجابة من المخطط.')}</li><li>${t('Review the template check, preview the document, then download it as a Word file for validation and approval.','راجع فحص النموذج وعاين المستند ثم نزّله كملف Word للتحقق والاعتماد.')}</li></ol>`;
+}
+function openFromAssistant(view,target){
+  if(!allowed(view))return;
+  if(state.activeView!==view){captureWorkspace();state.activeView=view;state.hostTab='synergy';}
+  returnFocus=null;state.panelSurface='host';
+  if(view==='forecasts'&&forecast().inScope(target)){state.forecast.selected=target;state.drawer='forecast-project';state.source=target;}
+  else if(view==='quality'&&quality().ctx.all.some(f=>f.key===target)){state.quality.selected=target;state.drawer='quality-finding';state.source=target;}
+  render({capture:false});document.querySelector('.inspector [data-action="close-panel"]')?.focus();
 }
 function assistanceResponse(kind) {
   if(kind.startsWith('forecast-why:'))return forecast().whyResponse(kind.slice(13));
   if(kind.startsWith('forecast-whatif:'))return forecast().whatIfResponse(kind.slice(16));
   if(kind.startsWith('quality-why:'))return quality().whyResponse(kind.slice(12));
+  if(kind.startsWith('forecast-topic:'))return forecast().topicResponse(kind.slice(15));
+  if(kind.startsWith('quality-topic:'))return quality().topicResponse(kind.slice(14));
+  if(kind.startsWith('doc-topic:'))return docTopicResponse(kind.slice(10));
   if(['forecasts','quality','artifact','access-unavailable'].includes(kind)){
     const view=kind==='forecasts'?'forecasts':kind==='quality'?'quality':allowed('documents')?'documents':'assistant';
     return `<h2>${t('Continue in AI Synergy','تابع في AI Synergy')}</h2><p>${t('Document tools, forecasts and data quality are available in the AI Synergy tab, with the actions allowed for your role.','تتوفر أدوات المستندات والتوقعات وجودة البيانات في تبويب AI Synergy حسب صلاحيات دورك.')}</p><button class="secondary-button" data-action="workspace-handoff" data-view="${view}">${icon('assistant')}${t('Open AI Synergy','فتح AI Synergy')}</button>`;
@@ -358,6 +467,8 @@ function assistanceResponse(kind) {
 function sendAssistance(text,kind=intent(text)) {
   if(state.assistance.busy||!text.trim())return;
   if(kind.startsWith('validation:'))kind='artifact';
+  // Inside AI Synergy the workspace is already open, so answer from the page instead of pointing to it.
+  if(embeddedWorkspace)kind={forecasts:allowed('forecasts')?'forecast-topic:summary':kind,quality:allowed('quality')?'quality-topic:summary':kind,artifact:allowed('validate')?'doc-topic:checks':kind}[kind]||kind;
   if(['project','kpi','milestone'].includes(kind)&&!canReadAlpha(account()))kind='scope';
   captureWorkspace();const thread=state.assistance;
   if(state.panelSurface==='floating')state.drawer=null;
@@ -371,6 +482,108 @@ function sendAssistance(text,kind=intent(text)) {
     render({assistScroll:true,focus:document.activeElement?.id==='assistance-messages'});
   },650);
 }
+function syncWorkspaceFrame(){
+  if(!workspaceFrameReady)return;
+  workspaceFrame.contentWindow.postMessage({
+    type:'synergy-host-context',accountId:state.accountId,language:lang,
+    destination:pendingFrameView
+  },frameOrigin);
+  pendingFrameView=undefined;
+}
+
+function openWorkspaceInFrame(view, detail){
+  captureWorkspace();
+  state.hostTab='synergy';
+  state.drawer=null;
+  state.chatView='closed';
+  pendingFrameView={view,detail};
+  render({capture:false});
+  workspaceFrame?.focus();
+}
+
+// Keep the frame attached while the host updates tabs, account context or chat.
+function renderHost(markup, extras){
+  const template=document.createElement('template');
+  template.innerHTML=markup;
+  const next=template.content.firstElementChild;
+  const nextRegion=next.querySelector('#platform-content');
+  let host=app.querySelector('.platform-application');
+  if(!host){
+    host=next;
+    app.append(host);
+  }else{
+    const region=host.querySelector('#platform-content');
+    for(const node of Array.from(host.children)){
+      if(node!==region)node.remove();
+    }
+    for(const node of Array.from(next.children)){
+      if(node!==nextRegion)region.before(node);
+    }
+    region.className=nextRegion.className;
+    for(const node of Array.from(region.childNodes)){
+      if(node!==workspaceFrame)node.remove();
+    }
+    region.append(...nextRegion.childNodes);
+  }
+
+  const region=host.querySelector('#platform-content');
+  if(state.hostTab==='synergy'&&!workspaceFrame){
+    workspaceFrame=document.createElement('iframe');
+    workspaceFrame.className='synergy-workspace-frame';
+    workspaceFrame.src=selectedDemoAccount?'/?embed=synergy':'/sign-in.html';
+    region.append(workspaceFrame);
+  }
+  if(workspaceFrame){
+    workspaceFrame.title=t('AI Synergy workspace','مساحة عمل AI Synergy');
+    workspaceFrame.hidden=state.hostTab!=='synergy';
+  }
+  for(const node of Array.from(app.children)){
+    if(node!==host)node.remove();
+  }
+  app.insertAdjacentHTML('beforeend',extras);
+  syncWorkspaceFrame();
+}
+
+window.addEventListener('message',event=>{
+  if(event.origin!==frameOrigin||!event.data||typeof event.data!=='object')return;
+  const message=event.data;
+  if(!embeddedWorkspace){
+    if(!workspaceFrame||event.source!==workspaceFrame.contentWindow)return;
+    if(message.type==='synergy-workspace-ready'){
+      const demoAccount=getAccount(message.demoAccountId);
+      if(demoAccount&&demoAccount.id!==state.accountId){
+        workspaceFrameReady=false;
+        switchAccount(demoAccount.id);
+      }
+      workspaceFrameReady=true;
+      syncWorkspaceFrame();
+    }else if(message.type==='synergy-sign-in-ready'){
+      workspaceFrameReady=false;
+    }else if(message.type==='synergy-demo-account'){
+      switchAccount(message.id);
+    }
+    return;
+  }
+  if(event.source!==window.parent||message.type!=='synergy-host-context')return;
+  const previousLanguage=lang;
+  const firstContext=!receivedHostContext;
+  receivedHostContext=true;
+  if(message.language==='en'||message.language==='ar')lang=message.language;
+  if(message.accountId!==state.accountId&&getAccount(message.accountId))switchAccount(message.accountId);
+  const destination=message.destination;
+  if(destination&&allowed(destination.view)){
+    navigate(destination.view);
+    if(destination.view==='forecasts'&&forecast().inScope(destination.detail)){
+      state.forecast.selected=destination.detail;
+      openPanel('forecast-project',destination.detail);
+    }
+    if(destination.view==='quality'&&quality().ctx.all.some(finding=>finding.key===destination.detail)){
+      state.quality.selected=destination.detail;
+      openPanel('quality-finding',destination.detail);
+    }
+  }else if(firstContext||lang!==previousLanguage)render();
+});
+
 function render({focus=false,scroll=false,responseStart=false,resetScroll=false,capture=true,assistScroll=false}={}) {
   document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';
   if(capture)captureWorkspace();
@@ -379,19 +592,24 @@ function render({focus=false,scroll=false,responseStart=false,resetScroll=false,
   const open=state.chatView!=='closed';
   const expanded=state.chatView==='expanded';
   document.querySelector('.skip-link').hidden=false;
-  document.querySelector('.skip-link').href=state.hostTab==='synergy'?'#main':'#platform-content';
-  app.className=`platform-app chat-${state.chatView}`;
-  const host=platformShell({t,icon,state,account:account(),accountButton:foundation().accountButton,languageControl,content:state.hostTab==='synergy'?aiWorkspace():''});
+  document.querySelector('.skip-link').href=embeddedWorkspace?'#main':'#platform-content';
+  app.className=embeddedWorkspace?`platform-app synergy-embed${state.chatView==='compact'?' chat-docked':''}`:`platform-app chat-${state.chatView}`;
   const launcher=`<button id="chat-launcher" class="chat-launcher assistance-launcher" data-action="chat-open" aria-label="${t('Open AI Assistance','فتح المساعدة الذكية')}" aria-expanded="${open}" aria-controls="synergy-chat">${icon('assistant')}<span>${t('AI Assistance','المساعدة الذكية')}</span>${state.assistance.unread?'<span class="launcher-unread" aria-hidden="true"></span>':''}</button>`;
-  const floating=open?assistanceChat({t,icon,mark,state,scope:foundation().scope,response:assistanceResponse,escape,languageControl,hasAlpha:canReadAlpha(account())}):'';
-  app.innerHTML=host+(!open?launcher:'')+floating+(state.drawer?overlay():'');
+  const floating=open?assistanceChat({t,icon,mark,state,scope:foundation().scope,response:assistanceResponse,escape,languageControl,hasAlpha:canReadAlpha(account()),context:embeddedWorkspace?assistContext():null,embedded:embeddedWorkspace}):'';
+  // The AI Assistance launcher belongs to the AI Synergy iframe, so it only appears on that tab.
+  if(embeddedWorkspace){
+    app.innerHTML=aiWorkspace()+(!open?launcher:'')+floating+(state.drawer?overlay():'');
+  }else{
+    const host=platformShell({t,icon,state,account:account(),accountButton:foundation().accountButton,languageControl,content:''});
+    renderHost(host,state.drawer?overlay():'');
+  }
   const drawer=document.querySelector('.inspector'),backdrop=document.querySelector('.overlay-backdrop');
   if(drawer){drawer.classList.add(state.panelSurface==='floating'?'floating-inspector':'platform-inspector');backdrop.classList.add(state.panelSurface==='floating'?'floating-panel-backdrop':'platform-panel-backdrop');}
   for(const detail of document.querySelectorAll('details[data-detail-key]'))detail.open=state.openDetails?.includes(detail.dataset.detailKey)||false;
   const inspectorContent=document.querySelector('.inspector-content');if(inspectorContent)inspectorContent.scrollTop=panelScroll;
   const input=document.querySelector('#message');if(input){input.value=state.chatDraft;syncSend();if(focus&&!state.drawer&&!input.disabled)input.focus();}
   const floatingInput=document.querySelector('#assistance-message');if(floatingInput&&focus&&!state.drawer&&!floatingInput.disabled)floatingInput.focus();
-  document.querySelector('.platform-application').inert=Boolean(state.drawer)||expanded;
+  document.querySelector(embeddedWorkspace?'.embedded-ai-workspace':'.platform-application').inert=Boolean(state.drawer)||expanded;
   if(open){const shell=document.querySelector('.assistance-shell');if(state.drawer&&state.panelSurface==='host')shell.inert=true;else for(const el of shell.querySelectorAll('.chat-chrome,.assistance-scope,.assistance-messages,.assistance-composer'))el.inert=Boolean(state.drawer);}
   if(state.drawer)drawer.querySelector('.icon-button')?.focus();
   const main=document.querySelector('#main');
@@ -430,7 +648,15 @@ function openPanel(type,source){if(['validation','documents','editor','review-ev
 function closePanel(){state.drawer=null;render();const action=returnFocus?.dataset.action;const source=returnFocus?.dataset.source;const returnId=returnFocus?.dataset.id;const returnKey=returnFocus?.dataset.key;const target=action==='dq-open'&&returnKey?(document.querySelector(`#main [data-action="dq-open"][data-key="${CSS.escape(returnKey)}"]`)||document.querySelector('#main')):action==='dq-rules'?document.querySelector('#main [data-action="dq-rules"]'):action==='forecast-open'&&returnId?document.querySelector(`#main [data-action="forecast-open"][data-id="${returnId}"]`)||document.querySelector('#main'):source?document.querySelector(`[data-action="source"][data-source="${source}"]`):action?document.querySelector(`[data-action="${action}"]`):document.querySelector('#message');target?.focus();}
 
 app.addEventListener('input',event=>{if(event.target.id==='assistance-message'){state.assistance.draft=event.target.value;document.querySelector('#assistance-composer .send-button').disabled=state.assistance.busy||!event.target.value.trim();}if(event.target.closest('#artifact-editor')){state.editor.fields[event.target.name]=event.target.value;document.querySelector('#period-end')?.setCustomValidity('');document.querySelector('#editor-state').textContent=t('Unsaved changes','تغييرات غير محفوظة');}if(event.target.id==='message'){syncSend();event.target.style.height='auto';event.target.style.height=Math.min(event.target.scrollHeight,180)+'px';}});
-app.addEventListener('submit',event=>{if(event.target.id==='assistance-composer'){event.preventDefault();sendAssistance(state.assistance.draft);return;}if(event.target.id==='artifact-editor'){event.preventDefault();saveArtifact(event.submitter?.value==='rerun');return;}if(event.target.id==='composer'){event.preventDefault();const text=document.querySelector('#message').value.trim();const kind=intent(text);if(kind.startsWith('validation:'))runValidation(kind.split(':')[1],text);else send(text,kind);}});
+app.addEventListener('submit',event=>{if(event.target.id==='ac-composer'){event.preventDefault();acSend();return;}if(event.target.id==='assistance-composer'){event.preventDefault();sendAssistance(state.assistance.draft);return;}if(event.target.id==='artifact-editor'){event.preventDefault();saveArtifact(event.submitter?.value==='rerun');return;}if(event.target.id==='composer'){event.preventDefault();const text=document.querySelector('#message').value.trim();const kind=intent(text);if(kind.startsWith('validation:'))runValidation(kind.split(':')[1],text);else send(text,kind);}});
+// Create a document: composer text, table cells and the project picker.
+app.addEventListener('input',event=>{
+  const el=event.target,a=state.authoring;
+  if(el.id==='ac-message'){a.composer=el.value;const send=document.querySelector('#ac-composer .send-button');if(send)send.disabled=state.authoringTyping||!el.value.trim();return;}
+  if(el.dataset?.cell){const draft=authoring().active();if(!draft)return;const [r,col]=el.dataset.cell.split(':');draft.table=draft.table?.length?draft.table:[{}];while(draft.table.length<=Number(r))draft.table.push({});draft.table[Number(r)][col]=el.value;}
+});
+app.addEventListener('keydown',event=>{if(event.target.id==='ac-message'&&event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();acSend();}});
+app.addEventListener('change',event=>{if(event.target.id==='ac-project'&&allowed('create')){state.authoring.setup.projectId=event.target.value;render();document.querySelector('#ac-project')?.focus();}});
 app.addEventListener('change',event=>{
   if(event.target.id==='validator-run'&&allowed('validate')){state.validator.run=Number(event.target.value);state.validator.filter='all';render();document.querySelector('#validator-run')?.focus();}
   if(event.target.id==='validator-project'&&allowed('validate')){state.validator.upload.projectId=event.target.value;render();document.querySelector('#validator-project')?.focus();}
@@ -496,8 +722,24 @@ app.addEventListener('click',async event=>{
   else if(action==='assistance-ask')sendAssistance(button.textContent.trim(),kind);
   else if((action==='ask'||action==='starter')&&(button.closest('.assistance-shell')||(state.drawer&&state.panelSurface==='floating')))sendAssistance(starterText(kind),kind);
   else if(action==='accounts')openPanel('accounts');
-  else if(action==='switch-account')switchAccount(id);
+  else if(action==='switch-account'){
+    const changed=id!==state.accountId;
+    switchAccount(id);
+    if(embeddedWorkspace&&changed&&getAccount(id))window.parent.postMessage({type:'synergy-demo-account',id},frameOrigin);
+  }
+  else if(action==='workspace-sign-in'){
+    if(embeddedWorkspace){
+      location.assign('/sign-in.html');
+      return;
+    }
+    if(workspaceFrameReady){
+      workspaceFrameReady=false;
+      workspaceFrame.src='/sign-in.html';
+    }
+    openWorkspaceInFrame('assistant');
+  }
   else if(action==='navigate'){if(button.closest('.assistance-shell'))state.chatView='closed';navigate(button.dataset.view);if(button.getAttribute('role')==='tab')document.querySelector('#workspace-tab-'+button.dataset.view)?.focus();}
+  else if(action==='assistant-task'){const task=button.dataset.task;if(task==='ask'){navigate('assistant');}else if(allowed(task==='create'?'create':'validate')&&allowed('documents')){state.documentMode=task;navigate('documents');}document.querySelector(`[data-action="assistant-task"][data-task="${task}"]`)?.focus();}
   else if(action==='document-mode'){if(!allowed('documents'))return;state.documentMode=button.dataset.mode==='create'&&allowed('create')?'create':'validate';render();document.querySelector(`[data-action="document-mode"][data-mode="${state.documentMode}"]`)?.focus();}
   else if(action==='validator-open'){
     if(!validatorDocumentsForAccount().some(doc=>doc.id===id))return;
@@ -568,8 +810,7 @@ app.addEventListener('click',async event=>{
     }
     else if(action==='quality-open'){
       if(!quality().ctx.all.some(f=>f.key===key))return;
-      captureWorkspace();state.chatView='closed';state.drawer=null;navigate('quality');
-      returnFocus=document.querySelector('#main');state.panelSurface='host';state.drawer='quality-finding';state.source=key;q.selected=key;render();document.querySelector('.inspector [data-action="close-panel"]')?.focus();
+      openWorkspaceInFrame('quality',key);
     }
     else if(action==='dq-status'){
       if(!can(account(),'scan'))return;
@@ -650,9 +891,39 @@ app.addEventListener('click',async event=>{
     const again=value!=null?document.querySelector(`#main [data-action="${action}"][data-value="${CSS.escape(value)}"]`):document.querySelector(`#main [data-action="${action}"]`);
     (again||document.querySelector('#fc-projects-title')?.closest('section')?.querySelector('button')||document.querySelector('#main'))?.focus();
   }
+  // Sign-in lives in the AI Synergy frame's URL, so signing out returns the frame to the sign-in page.
+  else if(action==='sign-out'){if(embeddedWorkspace)location.replace('/sign-in.html');}
+  else if(action?.startsWith('ac-')&&allowed('create')){
+    const a=state.authoring,draft=authoring().active(),field=draft&&pendingField(draft);
+    if(action==='ac-template'){a.setup.templateId=id;render();document.querySelector(`[data-action="ac-template"][data-id="${id}"]`)?.focus();}
+    else if(action==='ac-start'){const project=projectsFor(account()).find(p=>p.id===a.setup.projectId);if(!project)return;createDraft(a,a.setup.templateId,project.id);a.composer='';state.drawer=null;render();acScroll();acFocus();}
+    else if(action==='ac-open'){a.active=id;a.composer='';render();acScroll();acFocus();}
+    else if(action==='ac-back'){a.active=null;a.composer='';state.drawer=null;render();document.querySelector('#main')?.scrollTo({top:0});document.querySelector('#ac-title')?.focus();}
+    else if(action==='ac-delete'){a.drafts=a.drafts.filter(d=>d.id!==id);if(a.active===id)a.active=null;render();toast(t('Document deleted.','تم حذف المستند.'));document.querySelector('[data-action="ac-start"]')?.focus();}
+    else if(!draft)return;
+    else if(action==='ac-choose')acAnswer(button.dataset.value);
+    else if(action==='ac-date')acAnswer(document.querySelector('#ac-date')?.value||'');
+    else if(action==='ac-date-pick')acAnswer(button.dataset.value);
+    else if(action==='ac-use')acAnswer(button.dataset.value);
+    else if(action==='ac-fill'){a.composer=button.dataset.value;render();acScroll();const box=document.querySelector('#ac-message');box?.focus();box?.setSelectionRange(box.value.length,box.value.length);}
+    else if(action==='ac-skip'){if(field&&!state.authoringTyping)acAfter(skipField(draft,field.id));}
+    else if(action==='ac-edit'){state.drawer=null;if(editField(draft,id))acAfter(true,false);}
+    else if(action==='ac-row-add'){draft.table=draft.table?.length?draft.table:[{}];draft.table.push({});render();acScroll();document.querySelectorAll('.ac-editor tbody tr')[draft.table.length-1]?.querySelector('input,select')?.focus();}
+    else if(action==='ac-row-remove'){draft.table=(draft.table||[]).filter((_,i)=>i!==Number(index));render();document.querySelector('[data-action="ac-row-add"]')?.focus();}
+    else if(action==='ac-suggest'){if(field?.type!=='table')return;const rows=field.suggest(projectsFor(account()).find(p=>p.id===draft.projectId));const kept=(draft.table||[]).filter(r=>Object.values(r).some(v=>String(v).trim()));draft.table=[...kept,...rows];draft.error=null;render();document.querySelector('[data-action="ac-table-submit"]')?.focus();toast(t('Suggested rows added from Synergy. Check them before you submit.','أُضيفت صفوف مقترحة من سينرجي. راجعها قبل الإرسال.'));}
+    else if(action==='ac-table-submit'){if(field?.type==='table')acAnswer(draft.table||[]);}
+    else if(action==='ac-preview')openPanel('create-preview');
+    else if(action==='ac-download')acDownload();
+    else if(action==='ac-validate')acValidate();
+  }
+  else if(action==='assist-open'){openFromAssistant(button.dataset.view,button.dataset.view==='quality'?button.dataset.key:id);}
   else if(action==='forecast-open'){
     if(!allowed('forecasts')||!forecast().inScope(id))return;
-    if(button.closest('.assistance-shell')){captureWorkspace();state.chatView='closed';state.drawer=null;navigate('forecasts');returnFocus=document.querySelector(`#main [data-action="forecast-open"][data-id="${id}"]`)||document.querySelector('#main');state.panelSurface='host';state.drawer='forecast-project';state.source=id;state.forecast.selected=id;render();document.querySelector('.inspector [data-action="close-panel"]')?.focus();return;}
+    if(button.closest('.assistance-shell')){
+      if(embeddedWorkspace){openFromAssistant('forecasts',id);return;}
+      openWorkspaceInFrame('forecasts',id);
+      return;
+    }
     state.forecast.selected=id;openPanel('forecast-project',id);document.querySelector('.inspector [data-action="close-panel"]')?.focus();
   }
   else if(['fc-draft-type','fc-draft-index','fc-draft-delta','fc-draft-months'].includes(action)){
@@ -720,3 +991,4 @@ document.addEventListener('keydown',event=>{
   }
 });
 render();
+if(embeddedWorkspace)window.parent.postMessage({type:'synergy-workspace-ready',demoAccountId:selectedDemoAccount?.id},frameOrigin);

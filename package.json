@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "node dev-server.mjs",
     "start": "node dev-server.mjs",
-    "check": "node --check src/project-hold.js && node --check src/project-hold-ui.js && node --check src/app.js && node --check src/artifact-review.js && node --check src/document-validator.js && node --check src/document-upload.js && node --check src/demo-access.js && node --check src/foundation-views.js && node --check src/platform-shell.js && node --check src/assistance-chat.js && node --check src/forecast-model.js && node --check src/forecast-data.js && node --check src/forecast-view.js && node --check src/forecast-insights.js && node --check src/quality-rules.js && node --check src/quality-data.js && node --check src/quality-engine.js && node --check src/quality-view.js && node --check dev-server.mjs",
-    "test": "node --test"
+    "check": "node --check src/project-hold.js && node --check src/project-hold-ui.js && node --check src/app.js && node --check src/artifact-review.js && node --check src/document-validator.js && node --check src/document-upload.js && node --check src/demo-access.js && node --check src/foundation-views.js && node --check src/platform-shell.js && node --check src/assistance-chat.js && node --check src/forecast-model.js && node --check src/forecast-data.js && node --check src/forecast-view.js && node --check src/document-create.js && node --check src/document-create-view.js && node --check src/forecast-insights.js && node --check src/quality-rules.js && node --check src/quality-data.js && node --check src/quality-engine.js && node --check src/quality-view.js && node --check dev-server.mjs && node --check server/demo-gate.js && node --check server/build-static.mjs && node --check api/tawuniya-sso.js && node --check src/sign-in.js",
+    "test": "node --test",
+    "build": "node server/build-static.mjs"
+  },
+  "dependencies": {
+    "@vercel/functions": "^3.11.1"
   }
 }

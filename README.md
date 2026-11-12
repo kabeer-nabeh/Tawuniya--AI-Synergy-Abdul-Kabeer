@@ -24,11 +24,25 @@ Open http://localhost:5173. To use a different port, run `PORT=5174 npm run dev`
 npm run check
 ```
 
+## Deploy the passcode-protected demo on Vercel
+
+Import the repository into Vercel and use the checked-in build settings. In **Settings → Environment Variables**, add `AI_SYNERGY_DEMO_PASSCODE` as a sensitive server-side variable for each environment you deploy, such as Production and Preview. Use a randomly generated passcode of at least 16 characters, then deploy or redeploy. Share the passcode separately from the demo URL.
+
+Visitors see the public overview at `/demo.html` before entering the workspace. A valid passcode gives the browser an eight-hour session. The gate covers direct workspace, iframe, and app asset requests. If the passcode is missing or too short, the overview remains available and the workspace stays locked. Changing the passcode and redeploying invalidates earlier sessions on the new deployment.
+
+To try the full flow locally, set `AI_SYNERGY_DEMO_PASSCODE` in your shell before running `npm run dev`. With the variable unset, local development opens the workspace directly and `/demo.html` remains available for layout review.
+
+## Tawuniya sign-in and Mobility embedding
+
+Select **AI Synergy** in Mobility or **Tawuniya sign-in** in the demo account panel. **Continue with Tawuniya SSO** opens a demo account picker inside the iframe. Select an account to load the workspace in that same frame with its role and project scope. The host retains the frame when switching platform tabs.
+
+The demo picker uses sample identities. The gateway route is available for future integration through the server-side `TAWUNIYA_SSO_START_URL` variable. Live session establishment and the return to Mobility require Tawuniya integration. See the [implementation plan](AI-Synergy-02-Implementation-Plan.md).
+
 ## Try the flow
 
 The initial screen is a coded mock of the supplied **Mobility** application reference, with a purple platform header, breadcrumbs, project navigation, gauges, summary figures and a sample comparison chart. The previous full-screen screenshot is no longer rendered.
 
-Click **AI Synergy**, immediately after **Projects Overview**, to open the inline role-aware workspace. The first two tabs are **AI Assistance** (supplied AI orbit icon) and **AI Document Validator** (document/check icon). Assistant/Documents (UC01), Forecasts (UC02), Data quality (UC03), and authorized Administration live in this tab.
+Click **AI Synergy**, immediately after **Projects Overview**, to open the sign-in screen in the workspace iframe. The first two tabs are **AI Assistance** (supplied AI orbit icon) and **AI Document Validator** (document/check icon). Assistant/Documents (UC01), Forecasts (UC02), Data quality (UC03), and authorized Administration live in this tab.
 
 The bottom-right **AI Assistance** FAB opens a separate query-only chat. It has its own messages and unsent draft, can expand/collapse, and never contains the full workspace navigation or document editor. Requests for document tools, forecasts or quality provide a handoff to the AI Synergy tab. The current workspace destination and draft survive opening/closing assistance.
 
@@ -42,7 +56,7 @@ Click **Demo account** in the top-right platform header. The default account is 
 | Project Manager (Renad / Afnan) | Assistant, Documents with Create and Validate, Forecasts, Data quality | Assigned projects; Renad has no assigned sample, Afnan has Project Alpha |
 | EPMO Excellence Team | Assistant, Documents with Validate, Forecasts, Data quality, Administration | All sample projects and both sample documents |
 
-The inline AI workspace uses role-aware horizontal tabs in its top bar, opposite the scope badge and conversation-history control. The conversation sidebar and history control appear only in the **AI Assistance** tab, which uses the supplied AI icon. Documents, Forecasts, Data quality and Administration use the full content width. On mobile the tabs scroll horizontally above the scope controls. Administration is also reachable through the EPMO account panel. Each account retains separate workspace and assistance activity, unsent drafts, and saved/unsaved artifact edits. Switching retires in-flight sample responses and restores their prompts to the outgoing account's drafts. Task/tab navigation preserves progress. Reloading clears session state.
+The embedded AI workspace uses role-aware horizontal tabs in its top bar, opposite the scope badge and conversation-history control. The conversation sidebar and history control appear only in the **AI Assistance** tab, which uses the supplied AI icon. Documents, Forecasts, Data quality and Administration use the full content width. On mobile the tabs scroll horizontally above the scope controls. Administration is also reachable through the EPMO account panel. Each account retains separate workspace and assistance activity, unsent drafts, and saved/unsaved artifact edits. Switching retires in-flight sample responses and restores their prompts to the outgoing account's drafts. Task/tab navigation preserves progress. Reloading clears session state.
 
 **This milestone implements the foundation:** Forecasts and Data quality show their effective sample project scope and inspectable project context, with explicit unconnected states. They do not calculate forecasts, run scans or show invented results. Create document and Administration expose role-appropriate entry pages; guided authoring, prompt management and logs remain later milestones.
 
@@ -57,7 +71,7 @@ The inline AI workspace uses role-aware horizontal tabs in its top bar, opposite
 7. Inspect **View checked version** on an earlier result to see its original evidence. When required checks pass, open **Reviewer summary**. An optional suggestion can remain open.
 8. Switch to Arabic to explore the translated RTL layout.
 
-Sources and artifact editing open in scoped detail panels. Escape closes an open panel first; when assistance is expanded it returns to compact, then closes compact assistance. Escape does not close the inline AI Synergy workspace. The composer supports Enter to send and Shift+Enter for a new line. Source/document panels support Escape and keyboard focus containment. Conversation history and feedback are in memory for the current page session.
+Sources and artifact editing open in scoped detail panels. Escape closes an open panel first; when assistance is expanded it returns to compact, then closes compact assistance. Escape does not close the embedded AI Synergy workspace. The composer supports Enter to send and Shift+Enter for a new line. Source/document panels support Escape and keyboard focus containment. Conversation history and feedback are in memory for the current page session.
 
 ## Forecasts (UC02)
 

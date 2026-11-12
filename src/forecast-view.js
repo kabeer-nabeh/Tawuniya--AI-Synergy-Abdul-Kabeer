@@ -541,5 +541,37 @@ export function forecastUI({ t, icon, escape, account, fc }) {
     return `<div class="response-meta">${t('WHAT-IF EXPLANATION', 'شرح ماذا لو')}<span>${t(`As of ${month(AS_OF)} · Sample data`, `حتى ${month(AS_OF)} · بيانات تجريبية`)}</span></div><h2>${t(`What-if for ${who}`, `ماذا لو لـ ${who}`)}</h2><ul>${set}</ul><p>${t(`Holding these values from now to each end date moves the average IPI at end dates from <strong>${f2(b.end.p50)}</strong> to <strong>${f2(s.end.p50)}</strong> (${signed(s.end.p50 - b.end.p50)}). The average chance of finishing on plan moves from ${pct(b.chance)} to ${pct(s.chance)}.`, `تثبيت هذه القيم من الآن حتى تواريخ الانتهاء ينقل متوسط IPI من <strong>${f2(b.end.p50)}</strong> إلى <strong>${f2(s.end.p50)}</strong> (${signed(s.end.p50 - b.end.p50)}). وتنتقل فرصة الانتهاء ضمن الخطة من ${pct(b.chance)} إلى ${pct(s.chance)}.`)}</p><div class="data-table"><table><thead><tr><th>${t('Outcome', 'النتيجة')}</th><th>${t('Baseline', 'خط الأساس')}</th><th>${t('What-if', 'ماذا لو')}</th></tr></thead><tbody>${row(L(OUTCOMES.on.label), b.counts.on, s.counts.on)}${row(L(OUTCOMES.risk.label), b.counts.risk, s.counts.risk)}${row(L(OUTCOMES.below.label), b.counts.below, s.counts.below)}</tbody></table></div><p class="small-copy">${t('A what-if holds index values constant; it does not say how to reach them, and it does not change any project plan.', 'يثبت سيناريو ماذا لو قيم المؤشرات؛ ولا يوضح كيفية الوصول إليها، ولا يغيّر أي خطة مشروع.')}</p><button class="secondary-button" data-action="workspace-handoff" data-view="forecasts">${icon('chart')}${t('Open in Forecasts', 'فتح في التوقعات')}</button>`;
   }
 
-  return { page, panel, alertSettings, csv, summaryText, whyQuestion, whyResponse, whatIfQuestion, whatIfResponse, whatIfPayload, inScope: id => scoped.some(p => p.id === id), projectName: id => { const p = scoped.find(x => x.id === id); return p ? L(p.name) : ''; } };
+  // ---------- AI Assistance: suggested questions and answers for the Forecasts page ----------
+  const TOPICS = {
+    attention: ['Which projects need attention first?', 'ما المشاريع التي تحتاج إلى متابعة أولًا؟', 'warning'],
+    changes: [`What changed since the ${month(PREVIOUS_AS_OF)} run?`, `ما الذي تغيّر منذ تشغيل ${month(PREVIOUS_AS_OF)}؟`, 'history'],
+    drivers: ['What is pulling projects below plan?', 'ما الذي يدفع المشاريع إلى ما دون الخطة؟', 'chart'],
+    summary: ['Summarize the outlook for management', 'لخّص التوقعات للإدارة', 'document'],
+  };
+  const topics = () => Object.entries(TOPICS).map(([key, [en, arText, symbol]]) => ['forecast-topic:' + key, symbol, t(en, arText)]);
+  function topicResponse(key) {
+    const meta = `<div class="response-meta">${t('FORECASTS', 'التوقعات')}<span>${t(`As of ${month(AS_OF)} · Sample data`, `حتى ${month(AS_OF)} · بيانات تجريبية`)}</span></div>`;
+    const link = (id, extra) => `<button class="source-link" data-action="assist-open" data-view="forecasts" data-id="${escape(id)}">${icon('chart')}<span>${escape(nameOf(id))}${extra ? ` · ${extra}` : ''}</span>${icon('chevron')}</button>`;
+    const viewing = viewType === 'all' ? '' : t(` in ${projectsLabel(projects.length)} you are viewing`, ` ضمن ${projectsLabel(projects.length)} المعروضة`);
+    if (key === 'attention') {
+      const list = rows.filter(r => lens(r.result) && lens(r.result).outcome !== 'on').sort((a, b) => lens(a.result).chance - lens(b.result).chance).slice(0, 5);
+      if (!list.length) return `${meta}<h2>${t('No project needs attention right now', 'لا يوجد مشروع يحتاج إلى متابعة الآن')}</h2><p>${t('Every forecast project in this view is on plan.', 'جميع المشاريع المتوقعة في هذا العرض ضمن الخطة.')}</p>`;
+      return `${meta}<h2>${t('Projects to look at first', 'المشاريع التي تحتاج إلى متابعة أولًا')}</h2><p>${t(`These have the lowest chance of finishing on plan${viewing}. Open one to see its drivers and try a scenario.`, `هذه المشاريع لديها أقل فرصة للانتهاء ضمن الخطة${viewing}. افتح أحدها لمعرفة العوامل وتجربة سيناريو.`)}</p>${list.map(r => link(r.project.id, `${pct(lens(r.result).chance)} ${t('chance on plan', 'فرصة ضمن الخطة')}`)).join('')}`;
+    }
+    if (key === 'changes') {
+      const changes = alertsFor(projects, { baseline: baselineFor, previous: previousFor, rules: { ...DEFAULT_RULES, patterns: false, improvements: true } });
+      const worse = changes.filter(a => a.type === 'worsened').length, better = changes.filter(a => a.type === 'improved').length;
+      if (!changes.length) return `${meta}<h2>${t('Nothing changed outcome', 'لم تتغير أي نتيجة')}</h2><p>${t(`No project moved to a different outcome since the ${month(PREVIOUS_AS_OF)} run.`, `لم ينتقل أي مشروع إلى نتيجة مختلفة منذ تشغيل ${month(PREVIOUS_AS_OF)}.`)}</p>`;
+      return `${meta}<h2>${t(`Since the ${month(PREVIOUS_AS_OF)} run`, `منذ تشغيل ${month(PREVIOUS_AS_OF)}`)}</h2><p>${t(`${worse} moved to a worse outcome and ${better} improved.`, `انتقل ${worse} إلى نتيجة أسوأ وتحسّن ${better}.`)}</p><ul>${changes.slice(0, 5).map(a => { const [title, detail] = alertText(a); return `<li>${title}. ${detail}</li>`; }).join('')}</ul>${changes.slice(0, 3).map(a => link(a.projectId)).join('')}`;
+    }
+    if (key === 'drivers') {
+      const off = summary.counts.risk + summary.counts.below;
+      const list = Object.entries(summary.drivers).filter(([, n]) => n).sort((a, b) => b[1] - a[1]);
+      if (!list.length) return `${meta}<h2>${t('No project is off plan', 'لا يوجد مشروع خارج الخطة')}</h2>`;
+      return `${meta}<h2>${t('What is pulling projects below plan', 'ما الذي يدفع المشاريع إلى ما دون الخطة')}</h2><p>${t(`For the ${off} projects at risk or below plan, this is the index that holds each one back the most:`, `لكل من المشاريع الـ${off} المعرّضة للخطر أو دون الخطة، هذا هو المؤشر الذي يؤخره أكثر:`)}</p><ul>${list.map(([k, n]) => `<li><strong>${L(INDEX[k].name)}</strong> (${INDEX[k].abbr}): ${projectsLabel(n)}</li>`).join('')}</ul><p>${t('Use the what-if sliders on the page to see how much a better value would help.', 'استخدم أشرطة ماذا لو في الصفحة لمعرفة أثر تحسين القيمة.')}</p>`;
+    }
+    return `${meta}<h2>${t('Forecast summary', 'ملخص التوقعات')}</h2><ul>${summaryLines().map(l => `<li>${escape(l)}</li>`).join('')}</ul><p class="small-copy">${t('Sample data and an illustrative model. Review before sharing.', 'بيانات تجريبية ونموذج توضيحي. راجع قبل المشاركة.')}</p>`;
+  }
+
+  return { page, panel, alertSettings, csv, summaryText, whyQuestion, whyResponse, topics, topicResponse, whatIfQuestion, whatIfResponse, whatIfPayload, inScope: id => scoped.some(p => p.id === id), projectName: id => { const p = scoped.find(x => x.id === id); return p ? L(p.name) : ''; } };
 }

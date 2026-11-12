@@ -254,8 +254,38 @@ export function qualityUI({ t, icon, escape, account, q }) {
     return `<div class="response-meta">${t('DATA-QUALITY EXPLANATION', 'شرح جودة البيانات')}<span>${t(`Scan ${scanId} · Sample data`, `الفحص ${scanId} · بيانات تجريبية`)}</span></div><h2>${escape(L(f.objectName))}: ${escape(L(f.title))}</h2><p>${t('Why it was flagged', 'سبب الإبلاغ')}: <strong>${escape(L(f.reason))}</strong></p><p>${L(rule.what)}</p><p>${t('What to do', 'ما العمل')}: ${L(rule.fix)} ${t(`Owner: ${L(f.owner)}.`, `المالك: ${L(f.owner)}.`)}</p>${st !== 'open' ? `<p class="small-copy">${t(`Review status: ${L(STATUSES[st])}.`, `حالة المراجعة: ${L(STATUSES[st])}.`)}</p>` : ''}<p class="small-copy">${t('The reason above was computed by the rule. This explanation is written from it and does not change any data.', 'حُسب السبب أعلاه بواسطة القاعدة. كُتب هذا الشرح منه ولا يغيّر أي بيانات.')}</p><button class="secondary-button" data-action="quality-open" data-key="${escape(f.key)}">${icon('shield')}${t('Open in Data quality', 'فتح في جودة البيانات')}</button>`;
   }
 
+  // ---------- AI Assistance: suggested questions and answers for the Data quality page ----------
+  const TOPICS = {
+    urgent: ['Which findings should I fix first?', 'ما الملاحظات التي يجب معالجتها أولًا؟', 'warning'],
+    changes: ['What changed since the last scan?', 'ما الذي تغيّر منذ الفحص السابق؟', 'history'],
+    rules: ['Which checks fail most often?', 'ما الفحوصات التي تفشل أكثر؟', 'shield'],
+    summary: ['Summarize data quality for my scope', 'لخّص جودة البيانات ضمن نطاقي', 'document'],
+  };
+  const topics = () => Object.entries(TOPICS).map(([key, [en, arText, symbol]]) => ['quality-topic:' + key, symbol, t(en, arText)]);
+  function topicResponse(key) {
+    const meta = `<div class="response-meta">${t('DATA QUALITY', 'جودة البيانات')}<span>${t(`Scan ${scanId} · Sample data`, `الفحص ${scanId} · بيانات تجريبية`)}</span></div>`;
+    const link = f => `<button class="source-link" data-action="assist-open" data-view="quality" data-key="${escape(f.key)}">${icon('shield')}<span>${escape(L(f.objectName))} · ${escape(L(f.title))}</span>${icon('chevron')}</button>`;
+    if (key === 'urgent') {
+      const list = attention.slice().sort((a, b) => SEVERITIES.indexOf(a.severity) - SEVERITIES.indexOf(b.severity) || Number(newKeys.has(b.key)) - Number(newKeys.has(a.key))).slice(0, 5);
+      if (!list.length) return `${meta}<h2>${t('Nothing needs attention', 'لا شيء يحتاج إلى متابعة')}</h2><p>${t('Every finding in your scope has been reviewed.', 'تمت مراجعة جميع الملاحظات ضمن نطاقك.')}</p>`;
+      return `${meta}<h2>${t('Start with these findings', 'ابدأ بهذه الملاحظات')}</h2><p>${t(`${findingsLabel(attention.length)} need attention, ${sev.high} of them high severity. These come first: highest severity, newest first.`, `${findingsLabel(attention.length)} تحتاج إلى متابعة، منها ${sev.high} مرتفعة الخطورة. هذه أولًا: الأعلى خطورة ثم الأحدث.`)}</p>${list.map(link).join('')}`;
+    }
+    if (key === 'changes') {
+      return `${meta}<h2>${t('Since the last scan', 'منذ الفحص السابق')}</h2><p>${t(`Compared with scan ${baselineId}: <strong>${findingsLabel(cmp.added.length)}</strong> are new and <strong>${findingsLabel(cmp.resolved.length)}</strong> were resolved. ${findingsLabel(cmp.persisting.length)} are still open from before.`, `مقارنة بالفحص ${baselineId}: <strong>${findingsLabel(cmp.added.length)}</strong> جديدة و<strong>${findingsLabel(cmp.resolved.length)}</strong> تمت معالجتها. وما زالت ${findingsLabel(cmp.persisting.length)} مفتوحة من قبل.`)}</p>${cmp.added.length ? `<p>${t('Newest findings:', 'أحدث الملاحظات:')}</p>${cmp.added.slice(0, 3).map(link).join('')}` : ''}`;
+    }
+    if (key === 'rules') {
+      const counts = {};
+      for (const f of attention) counts[f.ruleId] = (counts[f.ruleId] || 0) + 1;
+      const top = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      if (!top.length) return `${meta}<h2>${t('No check is failing', 'لا يوجد فحص فاشل')}</h2>`;
+      return `${meta}<h2>${t('Checks that fail most often', 'الفحوصات الأكثر فشلًا')}</h2><ul>${top.map(([id, n]) => `<li><strong>${escape(L(RULE_BY_ID[id].title))}</strong>: ${findingsLabel(n)}. ${L(RULE_BY_ID[id].fix)}</li>`).join('')}</ul>`;
+    }
+    const { paras } = summaryParts(attention, true);
+    return `${meta}<h2>${t('Data-quality summary', 'ملخص جودة البيانات')}</h2>${paras.map(p => `<p>${p}</p>`).join('')}<p class="small-copy">${t('Sample data. Advisory only.', 'بيانات تجريبية. استشاري فقط.')}</p>`;
+  }
+
   return {
-    page, findingPanel, rulesPanel, csv, summaryText, whyQuestion, whyResponse,
+    page, findingPanel, rulesPanel, csv, summaryText, whyQuestion, whyResponse, topics, topicResponse,
     ctx: { all, attention, filtered, scan, scanId, baselineId, cmp, config, draft, dirty, canAct, canConfigure, inScope, scope, statusOf, summaryKeys: which => (which === 'filtered' ? filtered : attention).map(f => f.key), hasFilters, newKeys, objectsInScope },
   };
 }
