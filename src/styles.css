@@ -2038,3 +2038,11 @@ html:has(#app.synergy-embed),html:has(#app.synergy-embed) body { background:tran
 @media (max-width:980px){.ac-chat-body{grid-template-columns:minmax(0,1fr)}.ac-outline{position:static;order:-1;margin-top:14px}.ac-outline ol{display:none}}
 @media (max-width:640px){.ac-page{padding:18px 14px 24px}.ac-start{flex-direction:column;align-items:stretch}.ac-chat-head{flex-wrap:wrap}.ac-chat-head .ac-format{display:none}.doc-sheet{padding:24px 18px}.ac-drafts li{flex-wrap:wrap}.ac-option,.ac-chip{min-height:44px}}
 .ac-msg:has(.ac-editor),.ac-msg:has(.ac-issues){max-width:none}
+/* Simpler template cards: icon, name, one line, format and length */
+.ac-template{gap:4px;padding:14px 16px}
+.ac-template>strong{font-size:14px;margin-top:6px}
+.ac-template-icon{display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--brand-soft);color:var(--brand)}
+.ac-template-icon .icon{width:16px;height:16px}
+.ac-template-purpose{color:var(--muted)}
+.ac-template-meta{margin-top:6px}
+.ac-heading p:not(.page-kicker){max-width:none}
