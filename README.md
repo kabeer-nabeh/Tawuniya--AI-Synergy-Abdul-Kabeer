@@ -26,9 +26,9 @@ npm run check
 
 ## Deploy the passcode-protected demo on Vercel
 
-Import the repository into Vercel and use the checked-in build settings. In **Settings → Environment Variables**, add `AI_SYNERGY_DEMO_PASSCODE` as a sensitive server-side variable for each environment you deploy, such as Production and Preview. Use a randomly generated passcode of at least 16 characters, then deploy or redeploy. Share the passcode separately from the demo URL.
+Import the repository into Vercel and use the checked-in build settings. In **Settings → Environment Variables**, add `AI_SYNERGY_DEMO_PASSCODE` as a Secret for each environment you deploy, such as Production and Preview. Enter exactly six digits, including any leading zero, then deploy or redeploy. Share the passcode separately from the demo URL.
 
-Visitors see the public overview at `/demo.html` before entering the workspace. A valid passcode gives the browser an eight-hour session. The gate covers direct workspace, iframe, and app asset requests. If the passcode is missing or too short, the overview remains available and the workspace stays locked. Changing the passcode and redeploying invalidates earlier sessions on the new deployment.
+Visitors see the public overview at `/demo.html` before entering the workspace. A valid passcode gives the browser an eight-hour session. The gate covers direct workspace, iframe, and app asset requests. If the passcode is missing or its value differs from the six-digit format, the overview remains available and the workspace stays locked. Changing the passcode and redeploying invalidates earlier sessions on the new deployment.
 
 To try the full flow locally, set `AI_SYNERGY_DEMO_PASSCODE` in your shell before running `npm run dev`. With the variable unset, local development opens the workspace directly and `/demo.html` remains available for layout review.
 

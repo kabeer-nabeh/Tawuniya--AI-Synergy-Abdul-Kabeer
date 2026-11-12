@@ -3,6 +3,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 const cookieName = 'synergy_demo';
 const sessionSeconds = 8 * 60 * 60;
 const maxFormBytes = 2048;
+const passcodePattern = /^[0-9]{6}$/;
 const publicFiles = new Set([
   '/demo.html',
   '/demo.css',
@@ -55,7 +56,7 @@ function digest(value) {
 // Returns a response when the gate handles the request, otherwise the app serves it.
 export async function demoGate(request, { passcode = process.env.AI_SYNERGY_DEMO_PASSCODE, secure = true } = {}) {
   const { pathname } = new URL(request.url);
-  const configured = typeof passcode === 'string' && passcode.length >= 16;
+  const configured = typeof passcode === 'string' && passcodePattern.test(passcode);
   if (pathname === '/demo-access') {
     if (request.method !== 'POST') {
       return new Response(null, { status: 405, headers: { Allow: 'POST', 'Cache-Control': 'no-store' } });
@@ -67,7 +68,9 @@ export async function demoGate(request, { passcode = process.env.AI_SYNERGY_DEMO
     } catch {
       return redirect('/demo.html#passcode-error');
     }
-    if (!timingSafeEqual(digest(entered), digest(passcode))) return redirect('/demo.html#passcode-error');
+    if (!passcodePattern.test(entered) || !timingSafeEqual(digest(entered), digest(passcode))) {
+      return redirect('/demo.html#passcode-error');
+    }
 
     const expiry = Math.floor(Date.now() / 1000) + sessionSeconds;
     const token = expiry + '.' + signature(expiry, passcode).toString('base64url');

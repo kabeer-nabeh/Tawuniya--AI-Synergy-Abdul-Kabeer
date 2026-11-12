@@ -49,7 +49,7 @@ h1 { margin: 0; font-size: clamp(38px, 6vw, 60px); line-height: 1.04; letter-spa
 .demo-access-card form { display: grid; gap: 9px; }
 .demo-access-card label { font-size: 14px; font-weight: 700; }
 .demo-access-card input, .demo-access-card button { font: inherit; min-height: 46px; border-radius: 8px; }
-.demo-access-card input { width: 100%; padding: 9px 12px; border: 1px solid #a39aae; color: inherit; }
+.demo-access-card input { width: 100%; padding: 9px 12px; border: 1px solid #a39aae; color: inherit; letter-spacing: .24em; }
 .demo-access-card button {
   margin-top: 7px;
   padding: 10px 14px;
