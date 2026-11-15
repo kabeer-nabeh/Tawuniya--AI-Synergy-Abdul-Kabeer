@@ -56,3 +56,7 @@ The EPMO Excellence Team demo role has a separate Excellence review workspace ta
 Administration now manages validation/approval stages and responsible roles by document type. Its shared page-session store versions saved changes and records before/after audit entries. New owner and Excellence checks capture those settings; earlier checks keep their snapshots. Stale workflow settings require a new owner check before download. Production persistence and server authorization remain pending.
 
 Use concise page headings and action-led content. Avoid repeated introductory paragraphs and generic section explanations. Keep errors and meaningful action warnings visible; put supporting demo/technical detail in expandable help. Excellence review uses a primary upload/sample modal, a one-action context confirmation, and an issue-first report with optional history/details. See ADMIN-CONFIGURATION.md.
+
+## Excellence upload history, 15 November 2026
+
+Excellence review now starts with an empty Review history and an Upload document action. The upload modal accepts files only. The former seeded submission list and selectable samples are removed from this workspace. Successfully read files create account-isolated session entries with upload date, latest review date, project, and local status. Resume unfinished reviews or reopen findings from history; repeated reviews remain under the same file entry. Reload clears history.

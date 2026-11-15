@@ -1,4 +1,4 @@
-# Excellence Team submitted document review
+# Excellence Team upload and review history
 
 Implemented 15 November 2026 as the next frontend milestone after the Project Hold owner correction flow.
 
@@ -10,7 +10,7 @@ The new `reviews` capability is granted only to the Excellence demo role. Manage
 
 ## Journey
 
-1. Start from the Submitted for review list. Search by document, project, or submitter; filter by local review status; open the relevant document. Alternatively, use the top-right Upload or try samples button to open the upload modal.
+1. Start from Review history, initially empty. Select the top-right Upload document button and choose or drop a file in the modal. There are no preloaded submissions or sample choices.
 2. Inspect the identified document type and project. Uncertain identification leaves the relevant selection empty. Only Project Hold is supported in this milestone.
 3. Select Review document to confirm the displayed type/project and start checking. No results are generated before this action.
 4. Review missing information, invalid dates, project mismatches, warnings, passed checks, and items for manual assessment.
@@ -18,15 +18,13 @@ The new `reviews` capability is granted only to the Excellence demo role. Manage
 6. Change project/type, confirm again, and rerun when the selected context was wrong. Earlier runs retain their original evidence, project snapshot, reviewer identity, and timestamp.
 7. Copy the English reviewer summary and follow up manually in Synergy.
 
-Changing either context selection resets confirmation. Each demo submission retains independent review context and run history when reopened from the list. Uploads and standalone samples start a separate per-file review history. Current source, context, and run history persist across workspace navigation, language changes, and demo-account switching during the page session. A reload clears this state.
+Changing either context selection resets confirmation. Every successfully parsed upload creates a unique history entry, even when filenames match. Files awaiting confirmation can be resumed with Continue review. Reviewed files reopen through View findings. Rechecks update the same entry and preserve earlier runs. Current source, context, and run history persist across workspace navigation, language changes, and demo-account switching during the page session. A reload clears this state.
 
-## Demonstration samples
+## Upload history
 
-| Sample | Demonstrates |
-| --- | --- |
-| Missing content and project mismatch | Missing hold reason, reversed dates, missing planning details, and a manager value different from the project snapshot. |
-| Complete review fields | All local fields pass while original layout, evidence, signatures, content quality, and other unavailable checks still require assessment. |
-| Images and charts | Two visual-evidence items remain for manual review while the remaining text checks continue. |
+History contains only files uploaded by the active reviewer, filtered by current project access. Unknown-project uploads remain available for context selection. Each row shows filename, project, upload time, latest review time, local review status, and the appropriate action. Search by filename/project and filter by Not reviewed, Needs follow-up, or Manual assessment. Changing context without rechecking returns the entry to Not reviewed while preserving previous results.
+
+History is page-session memory and is explicitly labeled This session. Refreshing clears it. Failed or cancelled file reads do not create entries. Test fixtures still cover missing, complete, and visual-evidence cases but are not offered in the user interface.
 
 ## Review content
 
@@ -71,11 +69,11 @@ Uploads are processed in the browser and are not sent to Synergy or a model serv
 The BRD gap review remains a dated baseline. This milestone does not resolve the other artifact, administration, integration, or production-readiness gaps recorded there.
 
 
-## Submitted document inbox update
-
-The main entry is now a scope-filtered list of three illustrative submissions. Each row shows document identity and revision, project, submitter, submission date, local review status, and a Review or View findings action. States begin as Awaiting review and change only after the local checks run, to Needs follow-up or Manual assessment. These are not Synergy approval statuses. Search and filters include explicit no-match and no-assignment states. Returning to the inbox and switching documents preserves each submission’s context and review history. Upload and sample options remain available in a modal opened by the top-right primary button. Real submission retrieval and synchronization remain pending.
-
-
 ## Configuration and simplified review update
 
-Saved workflow settings now apply to new checks. Each report retains its original configuration snapshot. The confirmation page uses one Review document action. Findings lead the results layout, and review history/settings are available under Review details & history. The upload/sample entry opens a native modal with Escape-to-close and restored focus. See ADMIN-CONFIGURATION.md for shared configuration behavior and current limits.
+Saved workflow settings now apply to new checks. Each report retains its original configuration snapshot. The confirmation page uses one Review document action. Findings lead the results layout, and review history/settings are available under Review details & history. The upload entry opens a native modal with Escape-to-close and restored focus. See ADMIN-CONFIGURATION.md for shared configuration behavior and current limits.
+
+
+## Upload-only history verification
+
+113 tests pass, including empty history, same-name uploads, independent review runs, unfinished context, current reviewer and project scope, search, filters, and unsupported files. Browser verification covers upload, returning before review, resuming, reviewing, and reopening findings.

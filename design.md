@@ -189,3 +189,7 @@ Administration uses a document selector, separate validation/approval fieldsets,
 ## Admin editor refinement
 
 Keep Save and Discard in a sticky page heading, with concise saved/unsaved feedback. Use separate bordered fieldsets for Validation and Approval, with a Required switch and stage count in each heading. Shared column labels and compact rows reduce vertical repetition on desktop; mobile uses stacked, explicitly labeled fields. Audit history is a disclosure. Keep focus in the relevant phase after reordering or removing a stage.
+
+## Excellence upload history
+
+Use Review history as the page heading with a top-right Upload document primary button. Start with a concise empty state. Show filename, project, uploaded time, last review time, status and an action once uploads exist. Search and status filters appear only with history entries. Keep the upload modal file-only, and use Back to history in confirmation and result views. Label session-only retention.

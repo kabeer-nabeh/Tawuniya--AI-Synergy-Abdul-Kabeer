@@ -2350,3 +2350,15 @@ section.er-other-options{padding:16px 0 22px;margin:0 0 22px}
 .er-upload-modal .er-sample{padding-block:13px}
 .er-upload-modal .er-sample small{font-size:11px}
 @media(max-width:640px){.er-page>.dv-page-heading>.primary-button{margin-inline-start:0}.er-upload-modal{padding:16px;max-height:calc(100svh - 24px)}}
+
+/* Upload history uses real session entries, with an empty state before the first upload. */
+.er-history-empty{padding:64px 20px;text-align:center;border:1px dashed var(--line);border-radius:8px;margin-block:28px}
+.er-history-empty>.icon{width:28px;height:28px;color:var(--muted);margin-bottom:16px}
+.er-history-empty p{max-width:48ch;margin:8px auto}
+.er-upload-history{table-layout:fixed}
+.er-upload-history th:first-child{width:25%}
+.er-upload-history th:last-child{width:140px}
+.er-upload-history td{overflow-wrap:anywhere}
+.er-upload-history td:first-child{min-width:0}
+.er-upload-history time{white-space:normal}
+@media(max-width:760px){.er-history-empty{padding:40px 16px}.er-upload-history{table-layout:auto}}

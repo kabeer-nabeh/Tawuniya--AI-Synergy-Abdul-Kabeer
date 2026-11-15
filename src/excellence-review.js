@@ -9,43 +9,38 @@ export const REVIEW_SAMPLES=[
  {id:'complete',name:['Complete review fields','حقول المراجعة مكتملة'],description:['All local fields complete.','جميع الحقول المحلية مكتملة.']},
  {id:'visuals',name:['Images & charts to review','صور ومخططات للمراجعة'],description:['Includes visual evidence for manual review.','يتضمن أدلة مرئية للمراجعة اليدوية.']},
 ];
-export const freshExcellence=()=>({phase:'intake',showOptions:false,upload:emptyUpload(),source:null,context:{typeId:'',projectId:'',confirmed:false},detected:null,reports:[],run:null,filter:'all',busy:false,error:null,activeSubmission:null,submissionReviews:{},queueFilter:'all',queueQuery:''});
-export const DEMO_SUBMISSIONS=[
- {id:'SUB-2026-014',projectId:'alpha',variant:'issues',submittedAt:'2026-11-14T08:30:00Z',revision:1},
- {id:'SUB-2026-015',projectId:'claims',variant:'complete',submittedAt:'2026-11-13T10:15:00Z',revision:2},
- {id:'SUB-2026-016',projectId:'platform',variant:'visuals',submittedAt:'2026-11-12T07:45:00Z',revision:1},
-];
+export const freshExcellence=()=>({phase:'intake',showOptions:false,upload:emptyUpload(),source:null,context:{typeId:'',projectId:'',confirmed:false},detected:null,reports:[],run:null,filter:'all',busy:false,error:null,activeUpload:null,uploadReviews:{},uploads:[],nextUploadId:1,queueFilter:'all',queueQuery:''});
 const normalized=value=>String(value||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
 const requireReviewer=account=>{if(!can(account,'reviews'))throw new Error('review-forbidden');};
-const submissionKeys=['source','context','detected','reports','run','filter','error'];
-export function preserveSubmission(state) {
- if(state.activeSubmission)state.submissionReviews[state.activeSubmission]=structuredClone(Object.fromEntries(submissionKeys.map(key=>[key,state[key]])));
+const reviewKeys=['source','context','detected','reports','run','filter','error'];
+export function preserveUploadReview(state) {
+ if(state.activeUpload)state.uploadReviews[state.activeUpload]=structuredClone(Object.fromEntries(reviewKeys.map(key=>[key,state[key]])));
 }
-export function submittedDocuments(state,account) {
+export function uploadedDocuments(state,account) {
  requireReviewer(account);
+ preserveUploadReview(state);
  const projects=projectsFor(account);
- return DEMO_SUBMISSIONS.flatMap(entry=>{
-  const project=projects.find(project=>project.id===entry.projectId);if(!project)return [];
-  const report=state.submissionReviews[entry.id]?.reports.at(-1);
-  return [{...entry,project,submitter:project.owner,status:!report?'pending':report.counts.failed?'needs-revision':'manual-review',report}];
- });
+ return state.uploads.filter(entry=>entry.uploadedBy===account.id).flatMap(entry=>{
+  const saved=state.uploadReviews[entry.id];
+  if(!saved)return [];
+  const project=projects.find(project=>project.id===saved.context.projectId);
+  if(saved.context.projectId&&!project)return [];
+  const report=saved.reports.at(-1);
+  const current=report&&saved.context.confirmed&&report.project.id===saved.context.projectId&&report.typeId===saved.context.typeId;
+  return [{...entry,name:saved.source.name,project,status:!current?'pending':report.counts.failed?'needs-revision':'manual-review',report:current?report:null,lastReviewedAt:report?.at||null}];
+ }).reverse();
 }
-export function openSubmittedDocument(state,id,account) {
- const entry=submittedDocuments(state,account).find(entry=>entry.id===id);
- if(!entry)throw new Error('review-submission-unavailable');
- preserveSubmission(state);
- const saved=state.submissionReviews[id];
- if(saved){Object.assign(state,structuredClone(saved));state.phase=state.reports.length&&state.context.confirmed&&state.reports.at(-1).project.id===state.context.projectId&&state.reports.at(-1).typeId===state.context.typeId?'report':'confirm';}
- else {
-  const source=reviewSample(entry.variant,entry.project);
-  source.name=`Project-Hold-${entry.project.id}-revision-${entry.revision}.txt`;
-  selectReviewSource(state,source,account);
- }
- state.activeSubmission=id;
+export function openUploadedDocument(state,id,account) {
+ const entry=uploadedDocuments(state,account).find(entry=>entry.id===id);
+ if(!entry)throw new Error('review-upload-unavailable');
+ preserveUploadReview(state);
+ Object.assign(state,structuredClone(state.uploadReviews[id]));
+ state.phase=entry.report?'report':'confirm';
+ state.activeUpload=id;state.showOptions=false;
  state.upload.token++;state.upload.reading=false;state.error=null;
 }
-export function returnToReviewInbox(state,account) {
- requireReviewer(account);preserveSubmission(state);state.phase='intake';state.showOptions=false;
+export function returnToReviewHistory(state,account) {
+ requireReviewer(account);preserveUploadReview(state);state.phase='intake';state.showOptions=false;
 }
 
 export function reviewSample(id,project) {
@@ -68,13 +63,16 @@ export function detectReviewContext(file,account) {
  return {typeId:template?.id||'',projectId:matches.length===1?matches[0].id:'',typeStatus:template?'detected':'uncertain',projectStatus:matches.length===1?'detected':matches.length>1?'ambiguous':'uncertain',documentProject:fields.projectName};
 }
 
-export function selectReviewSource(state,file,account) {
+export function selectReviewSource(state,file,account,{now=()=>new Date().toISOString()}={}) {
  requireReviewer(account);
  if(!file?.text?.trim())throw new Error('review-no-file');
- preserveSubmission(state);state.activeSubmission=null;
+ preserveUploadReview(state);state.activeUpload=null;
  state.source=structuredClone(file);state.detected=detectReviewContext(file,account);
  state.context={typeId:state.detected.typeId==='project-hold'?'project-hold':'',projectId:state.detected.projectId,confirmed:false};
- state.phase='confirm';state.reports=[];state.run=null;state.filter='all';state.error=null;
+ state.phase='confirm';state.showOptions=false;state.reports=[];state.run=null;state.filter='all';state.error=null;
+ state.activeUpload=`upload-${state.nextUploadId++}`;
+ state.uploads.push({id:state.activeUpload,uploadedBy:account.id,uploadedAt:now()});
+ preserveUploadReview(state);
 }
 
 export function reviewReadiness(state,account) {
@@ -114,7 +112,7 @@ export function runExcellenceReview(state,account,{now=()=>new Date().toISOStrin
  const counts=Object.fromEntries(['failed','warning','passed','manual'].map(status=>[status,findings.filter(c=>c.status===status).length]));
  const report={run:state.reports.length+1,at:now(),reviewer:{id:account.id,name:[...account.name]},typeId:'project-hold',project,source,fields,workflow:snapshot,findings,counts,sections:reviewSectionSummary(fields,findings,snapshot),verdict:counts.failed?'needs-revision':'manual-review'};
  state.reports.push(report);state.run=report.run;state.phase='report';state.filter=counts.failed?'failed':'manual';state.error=null;
- preserveSubmission(state);
+ preserveUploadReview(state);
  return report;
 }
 

@@ -1,7 +1,7 @@
 import { createWorkflowStore,freshWorkflowAdmin,loadWorkflowDraft,workflowSnapshot,workflowDirty,requestWorkflowType,saveWorkflow,addWorkflowStage,removeWorkflowStage,moveWorkflowStage,setWorkflowEnabled,updateWorkflowStage } from './workflow-config.js';
 import { workflowAdminUI } from './workflow-config-ui.js';
 import { createHoldDocument,holdProjectValue,holdDownloadState,HOLD_FIELDS } from './project-hold.js';
-import { freshExcellence,selectReviewSource,reviewSample,runExcellenceReview,reviewReadiness,changeReviewContext,reviewerSummaryText,openSubmittedDocument,returnToReviewInbox,preserveSubmission } from './excellence-review.js';
+import { freshExcellence,selectReviewSource,runExcellenceReview,reviewReadiness,changeReviewContext,reviewerSummaryText,openUploadedDocument,returnToReviewHistory,preserveUploadReview } from './excellence-review.js';
 import { excellenceReviewUI } from './excellence-review-ui.js';
 import { exportHoldDocument } from './project-hold-export.js';
 import { holdEditor } from './project-hold-ui.js';
@@ -226,7 +226,7 @@ function reviewFocus(){state.viewScroll.reviews=0;render({capture:false});docume
 async function chooseExcellenceFiles(files) {
   if(!allowed('reviews')||!files.length||state.excellence.busy)return;
   const review=state.excellence,identity=account();
-  preserveSubmission(review);review.activeSubmission=null;
+  preserveUploadReview(review);review.activeUpload=null;
   review.source=null;review.phase='intake';review.showOptions=true;review.error=null;
   const pending=readUploadSelection(review.upload,files,file=>readUploadedFile(file,{detectVisuals:true}));render();
   const current=await pending;
@@ -833,18 +833,13 @@ app.addEventListener('click',async event=>{
     else if(action==='wa-remove')document.querySelector(`[data-action="wa-add"][data-phase="${phase}"]`)?.focus({preventScroll:true});
     else document.querySelector('#wa-document-type')?.focus();
   }
-  else if(['review-sample','review-intake','review-context','review-run','review-filter','review-latest','review-locate','review-copy','review-open-submission','review-clear-inbox','review-options','review-confirm-run'].includes(action)){
+  else if(['review-intake','review-context','review-run','review-filter','review-latest','review-locate','review-copy','review-open-upload','review-clear-inbox','review-options','review-confirm-run'].includes(action)){
     if(!allowed('reviews')||state.excellence.busy)return;
     const review=state.excellence;
     if(action==='review-options'){if(review.showOptions)closeReviewOptions();else{review.showOptions=true;render();}}
-    else if(action==='review-open-submission'){openSubmittedDocument(review,id,account());reviewFocus();}
+    else if(action==='review-open-upload'){openUploadedDocument(review,id,account());reviewFocus();}
     else if(action==='review-clear-inbox'){review.queueFilter='all';review.queueQuery='';render();document.querySelector('#review-inbox-search')?.focus();}
-    else if(action==='review-sample'){
-      const project=projectsFor(account())[0];if(!project)return;
-      review.upload.token++;review.upload.reading=false;review.upload.error=null;
-      selectReviewSource(review,reviewSample(id,project),account());
-      reviewFocus();
-    }else if(action==='review-intake'){returnToReviewInbox(review,account());reviewFocus();}
+    else if(action==='review-intake'){returnToReviewHistory(review,account());reviewFocus();}
     else if(action==='review-context'){changeReviewContext(review,account());reviewFocus();}
     else if(action==='review-confirm-run'){if(['ready','confirmation'].includes(reviewReadiness(review,account()))){review.context.confirmed=true;startExcellenceReview();}}
     else if(action==='review-run')startExcellenceReview();
