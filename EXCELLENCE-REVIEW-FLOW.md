@@ -10,7 +10,7 @@ The new `reviews` capability is granted only to the Excellence demo role. Manage
 
 ## Journey
 
-1. Start from Review history, initially empty. Select the top-right Upload document button and choose or drop a file in the modal. There are no preloaded submissions or sample choices.
+1. Start from Review history, initially empty. Select the top-right Upload document button and choose or drop a file in the modal. Alternatively, choose one of the three labeled demo samples in the modal. History has no preloaded entries.
 2. Inspect the identified document type and project. Uncertain identification leaves the relevant selection empty. Only Project Hold is supported in this milestone.
 3. Select Review document to confirm the displayed type/project and start checking. No results are generated before this action.
 4. Review missing information, invalid dates, project mismatches, warnings, passed checks, and items for manual assessment.
@@ -22,9 +22,9 @@ Changing either context selection resets confirmation. Every successfully parsed
 
 ## Upload history
 
-History contains only files uploaded by the active reviewer, filtered by current project access. Unknown-project uploads remain available for context selection. Each row shows filename, project, upload time, latest review time, local review status, and the appropriate action. Search by filename/project and filter by Not reviewed, Needs follow-up, or Manual assessment. Changing context without rechecking returns the entry to Not reviewed while preserving previous results.
+History contains files uploaded and samples selected by the active reviewer, filtered by current project access. Samples are labeled Demo sample. Unknown-project uploads remain available for context selection. Each row shows filename, project, upload time, latest review time, local review status, and the appropriate action. Search by filename/project and filter by Not reviewed, Needs follow-up, or Manual assessment. Changing context without rechecking returns the entry to Not reviewed while preserving previous results.
 
-History is page-session memory and is explicitly labeled This session. Refreshing clears it. Failed or cancelled file reads do not create entries. Test fixtures still cover missing, complete, and visual-evidence cases but are not offered in the user interface.
+History is page-session memory and is explicitly labeled This session. Refreshing clears it. Failed or cancelled file reads do not create entries. The modal offers missing-content, complete-field, and visual-evidence demo samples. Selecting a sample uses the same context confirmation and review flow as an upload.
 
 ## Review content
 
@@ -74,6 +74,8 @@ The BRD gap review remains a dated baseline. This milestone does not resolve the
 Saved workflow settings now apply to new checks. Each report retains its original configuration snapshot. The confirmation page uses one Review document action. Findings lead the results layout, and review history/settings are available under Review details & history. The upload entry opens a native modal with Escape-to-close and restored focus. See ADMIN-CONFIGURATION.md for shared configuration behavior and current limits.
 
 
-## Upload-only history verification
+## Upload history verification
 
 113 tests pass, including empty history, same-name uploads, independent review runs, unfinished context, current reviewer and project scope, search, filters, and unsupported files. Browser verification covers upload, returning before review, resuming, reviewing, and reopening findings.
+
+The restored sample picker is covered by 19 review tests and a browser walkthrough from sample selection to results and reopening history.

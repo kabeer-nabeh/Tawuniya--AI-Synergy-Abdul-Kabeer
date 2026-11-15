@@ -27,7 +27,7 @@ export function uploadedDocuments(state,account) {
   if(saved.context.projectId&&!project)return [];
   const report=saved.reports.at(-1);
   const current=report&&saved.context.confirmed&&report.project.id===saved.context.projectId&&report.typeId===saved.context.typeId;
-  return [{...entry,name:saved.source.name,project,status:!current?'pending':report.counts.failed?'needs-revision':'manual-review',report:current?report:null,lastReviewedAt:report?.at||null}];
+  return [{...entry,name:saved.source.name,sample:Boolean(saved.source.sample),project,status:!current?'pending':report.counts.failed?'needs-revision':'manual-review',report:current?report:null,lastReviewedAt:report?.at||null}];
  }).reverse();
 }
 export function openUploadedDocument(state,id,account) {

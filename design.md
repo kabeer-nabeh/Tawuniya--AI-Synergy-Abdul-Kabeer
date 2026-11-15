@@ -193,3 +193,7 @@ Keep Save and Discard in a sticky page heading, with concise saved/unsaved feedb
 ## Excellence upload history
 
 Use Review history as the page heading with a top-right Upload document primary button. Start with a concise empty state. Show filename, project, uploaded time, last review time, status and an action once uploads exist. Search and status filters appear only with history entries. Keep the upload modal file-only, and use Back to history in confirmation and result views. Label session-only retention.
+
+## Sample choices restored, 15 November 2026
+
+The Excellence upload modal includes three labeled demo samples below the file drop zone. History stays empty until the user uploads or selects a sample. Selected samples appear with a Demo sample label and retain their review history. This supersedes the file-only modal instruction above.

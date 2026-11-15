@@ -31,7 +31,7 @@ Open **AI Synergy**, continue through the demo SSO account picker, and choose an
 
 - **AI Assistance:** sample questions and source inspection, plus Create a document and Validate a document tasks. The floating AI Assistance chat is separate.
 - **Project Hold validation:** choose a sample or upload a document, inspect findings, correct fields, recheck, and download an editable DOCX. Source mismatches, invalid dates, and outdated checks must be resolved before download. Missing information requires acknowledgement.
-- **Excellence review:** upload documents, confirm project/type, inspect findings and every document section, and copy the reviewer summary. The top-right Upload document button opens a file-only modal. Review history lists your actual session uploads with dates, status, and actions to resume or reopen findings. This is a read-only assessment; final decisions remain in Synergy.
+- **Excellence review:** upload documents, confirm project/type, inspect findings and every document section, and copy the reviewer summary. The top-right Upload document button opens a modal with file upload and three labeled demo samples. Review history lists your session uploads and selected samples with dates, status, and actions to resume or reopen findings. This is a read-only assessment; final decisions remain in Synergy.
 - **Administration:** configure validation/approval stages and responsible roles for each catalog type. Save/discard, stage ordering, version history, and old/new values are supported. New owner/Excellence checks use the saved version.
 - **Forecasts and Data quality:** interactive simulations, scenario comparisons, rule-based findings, filters, and local review actions over sample records.
 

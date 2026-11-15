@@ -60,3 +60,7 @@ Use concise page headings and action-led content. Avoid repeated introductory pa
 ## Excellence upload history, 15 November 2026
 
 Excellence review now starts with an empty Review history and an Upload document action. The upload modal accepts files only. The former seeded submission list and selectable samples are removed from this workspace. Successfully read files create account-isolated session entries with upload date, latest review date, project, and local status. Resume unfinished reviews or reopen findings from history; repeated reviews remain under the same file entry. Reload clears history.
+
+## Sample choices restored, 15 November 2026
+
+The Excellence upload modal includes three labeled demo samples below the file drop zone. History stays empty until the user uploads or selects a sample. Selected samples appear with a Demo sample label and retain their review history. This supersedes the file-only modal instruction above.

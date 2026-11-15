@@ -165,11 +165,12 @@ test('unfinished uploads and changed context reopen at confirmation without losi
  assert.equal(state.phase,'confirm');assert.equal(state.context.confirmed,false);
  assert.equal(state.reports[0].project.id,'alpha');assert.equal(state.context.projectId,'claims');
 });
-test('history has an upload-only empty state, filename search and review filters',()=>{
+test('history starts empty with upload and sample entry, filename search and review filters',()=>{
  const state=freshExcellence();let html=ui(state);
- assert.match(html,/Review history/);assert.match(html,/No uploads yet/);
+ assert.match(html,/Review history/);assert.match(html,/No review history yet/);
  assert.match(html,/class="primary-button" data-action="review-options"/);
- assert.doesNotMatch(html,/review-sample|try samples|SUB-2026|Submitted by/);
+ assert.doesNotMatch(html,/SUB-2026|Submitted by/);
+ assert.equal((html.match(/data-action="review-sample"/g)||[]).length,3);
  selectReviewSource(state,{...reviewSample('issues',project),name:'Alpha hold.txt'},reviewer);
  const id=state.activeUpload;returnToReviewHistory(state,reviewer);
  selectReviewSource(state,{...reviewSample('complete',PROJECTS.find(p=>p.id==='claims')),name:'Claims hold.txt'},reviewer);
@@ -192,4 +193,13 @@ test('unknown projects remain resumable and invalid files do not enter history',
  assert.equal(entry.project,undefined);
  returnToReviewHistory(state,reviewer);openUploadedDocument(state,entry.id,reviewer);
  assert.equal(state.phase,'confirm');
+});
+
+test('selected demo samples are labeled and reopen from history with their findings',()=>{
+ const state=setup('visuals'),id=state.activeUpload;
+ run(state);returnToReviewHistory(state,reviewer);
+ assert.equal(uploadedDocuments(state,reviewer)[0].sample,true);
+ assert.match(ui(state),/Demo sample/);
+ openUploadedDocument(state,id,reviewer);
+ assert.equal(state.phase,'report');assert.equal(state.reports[0].counts.manual,6);
 });
