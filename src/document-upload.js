@@ -1,5 +1,6 @@
 import { HOLD_TEMPLATE } from './project-hold.js';
 import { validDate } from './artifact-review.js';
+import { wordVisualSections,textVisualSections } from './document-visuals.js';
 
 export const MAX_UPLOAD_BYTES=10*1024*1024;
 export const VALIDATION_TEMPLATES=[
@@ -94,9 +95,9 @@ export function uploadError(code,t) {
   return t(...(messages[code]||messages['read-failed']));
 }
 
-export async function readUploadedFile(file) {
+export async function readUploadedFile(file,{detectVisuals=false}={}) {
   const extension=checkUploadFile(file),buffer=await file.arrayBuffer();
-  let text='',pages=null;
+  let text='',pages=null,manualSections=[],visualInspection=detectVisuals?'inspected':'not-requested';
   if(extension==='pdf') {
     if(new TextDecoder().decode(buffer.slice(0,5))!=='%PDF-')throw new Error('read-failed');
     const pdf=await import('../public/vendor/pdfjs/pdf.min.mjs');
@@ -112,6 +113,13 @@ export async function readUploadedFile(file) {
       for(let index=1;index<=pages;index++) {
         const page=await document.getPage(index),items=await page.getTextContent();
         content.push(items.items.map(item=>typeof item.str==='string'?item.str+(item.hasEOL?'\n':' '):'').join(''));
+        if(detectVisuals)try {
+          const operations=await page.getOperatorList();
+          const imageOps=[pdf.OPS.paintImageXObject,pdf.OPS.paintInlineImageXObject,pdf.OPS.paintImageMaskXObject,pdf.OPS.paintImageXObjectRepeat,pdf.OPS.paintImageMaskXObjectRepeat].filter(Number.isInteger);
+          const image=operations.fnArray.some(op=>imageOps.includes(op));
+          const graphic=operations.fnArray.includes(pdf.OPS.constructPath);
+          if(image||graphic)manualSections.push({kind:image?'image':'graphic',location:[`Page ${index}: ${image?'image content':'vector graphics'}`,`الصفحة ${index}: ${image?'محتوى صوري':'رسوم متجهة'}`],description:['Inspect the visual content on this page manually. Graphics may include charts, diagrams or decorative elements; their meaning and values were not evaluated.','افحص المحتوى المرئي في هذه الصفحة يدويًا. قد تتضمن الرسوم مخططات أو رسومًا توضيحية أو عناصر زخرفية؛ لم يُقيّم معناها أو قيمها.']});
+        } catch {visualInspection='unavailable';}
       }
       text=content.join('\n\n');
     } catch(error) {
@@ -124,12 +132,14 @@ export async function readUploadedFile(file) {
     await import('../public/vendor/mammoth/mammoth.browser.min.js');
     const result=await globalThis.mammoth.extractRawText({arrayBuffer:buffer});
     text=result.value;
+    if(detectVisuals)try {manualSections=wordVisualSections(buffer);}catch {visualInspection='unavailable';}
   } else {
     text=new TextDecoder('utf-8',{fatal:true}).decode(buffer);
     if(text.includes('\0'))throw new Error('read-failed');
+    if(detectVisuals){manualSections=textVisualSections(text);visualInspection='text-only';}
   }
   text=text.replace(/\u0000/g,'').trim();
   if(!text)throw new Error('no-text');
   if(text.length>250000)throw new Error('text-too-long');
-  return {name:file.name,size:file.size,extension,text,pages,fields:fieldsFromText(text)};
+  return {name:file.name,size:file.size,extension,text,pages,fields:fieldsFromText(text),manualSections,visualInspection};
 }

@@ -1,4 +1,5 @@
 import { validDate } from './artifact-review.js';
+import { enabledStages,workflowRole,APPROVAL_FIELDS } from './workflow-config.js';
 
 // Reference-informed demo rules, not an approved Tawuniya acceptance policy.
 export const HOLD_TEMPLATE={id:'project-hold',name:['EPMO Project Hold','تعليق مشروع إدارة المشاريع'],version:'2026.1-demo',description:['Hold reason, project details, review tables and sign-off information.','سبب التعليق وبيانات المشروع وجداول المراجعة ومعلومات التوقيع.']};
@@ -12,15 +13,20 @@ export const HOLD_GROUPS=[['metadata','Project information','معلومات ال
 export const blankHoldFields=()=>Object.fromEntries(HOLD_FIELDS.map(([key])=>[key,'']));
 const clean=s=>String(s||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();
 export function extractHoldFields(text) {
- const fields=blankHoldFields(),lines=text.replace(/\*\*/g,'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+ const fields=blankHoldFields(),lines=text.split(/^Original extracted text \(reference only\)\s*$/m)[0].replace(/\*\*/g,'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean),seen=new Set();
  const aliases={manager:['Project Manager'],sector:['Project Executer Sector','Project Executor Sector'],reason:['Project Hold Reason'],resumeDate:['Expected Resumption Date'],preparedBy:['Prepared By Project Manager']};
  const lookup=new Map(HOLD_FIELDS.flatMap(([key,en,ar])=>[en,ar,...aliases[key]||[]].map(label=>[clean(label),key])));
- const isLabel=line=>lookup.has(clean(line.replace(/[:：]$/,'')))||lookup.has(clean(line.split(/[:：]/)[0]));
+ const headings=new Set(HOLD_GROUPS.flatMap(([,en,ar])=>[clean(en),clean(ar)]));
+ const isLabel=line=>headings.has(clean(line))||lookup.has(clean(line.replace(/[:：]$/,'')))||lookup.has(clean(line.split(/[:：]/)[0]));
  lines.forEach((line,index)=>{
   const split=line.match(/^([^:：]+)[:：]\s*(.*)$/),key=lookup.get(clean(split?split[1]:line));
-  if(!key)return;
-  const value=split?.[2]||(!isLabel(lines[index+1]||'')?lines[index+1]||'':'');
-  fields[key]=value.slice(0,2000);
+  if(!key||seen.has(key))return;
+  seen.add(key);
+  const content=[];
+  if(split?.[2])content.push(split[2]);
+  const multiline=HOLD_FIELDS.find(f=>f[0]===key)?.[4]==='textarea';
+  for(let next=index+1;next<lines.length&&!isLabel(lines[next])&&(multiline||!content.length);next++)content.push(lines[next]);
+  fields[key]=content.join('\n').slice(0,2000);
  });
  return fields;
 }
@@ -29,7 +35,7 @@ export function createHoldDocument(id,project,upload=null) {
  if(!upload)Object.assign(fields,{projectName:project.name[0],manager:project.owner[0],sector:project.sector,holdDate:'2026-11-30',resumeDate:'2026-11-01',preparedBy:project.owner[0],preparedOn:'2026-11-11',reason:'Pause delivery while the external data-sharing agreement is finalized.',impact:'Work on data integration pauses. The project team will review the schedule before work resumes.',budgetReview:'Budget under review',budgetJustification:'Confirm vendor costs during the hold.',scheduleReview:'Delivery paused',scheduleJustification:'Rebaseline after the agreement is signed.',deliverablesReview:'Integration deliverables paused',deliverablesJustification:'Awaiting access to source data.',risksReview:'Dependency risk remains open',risksJustification:'Track the data-sharing agreement weekly.',issuesReview:'External agreement pending',issuesJustification:'Legal review is in progress.',sponsorName:'Demo sponsor',sponsorDate:'2026-11-30',executorName:'Demo executor',executorDate:'2026-11-30',contributorName:'Demo contributor',contributorDate:'2026-11-30'});
  return {artifact:{id,revision:1,fields},kind:'project-hold',project:structuredClone(project),upload,reviews:[],draft:null};
 }
-export function holdChecks(fields,project) {
+export function holdChecks(fields,project,workflow=null) {
  const checks=[];
  const add=(key,group,label,ar,status,evidence,rule,field=null)=>checks.push({key,group,label:[label,ar],status,evidence,rule,field});
  const present=key=>Boolean(fields[key]?.trim());
@@ -48,11 +54,39 @@ export function holdChecks(fields,project) {
  ['signature','approvals','Digital signature verification','التحقق من التوقيع الرقمي','Signature verification is not connected. Names and dates are not authenticated signatures.','التحقق من التوقيع غير متصل. الأسماء والتواريخ ليست توقيعات موثقة.'],
  ['ai','advisory','AI content assessment','تقييم المحتوى بالذكاء الاصطناعي','AI review is not connected. A human must assess the hold justification and impact.','مراجعة الذكاء الاصطناعي غير متصلة. يجب أن يقيّم المراجع المبررات والأثر.'],
  ['pii','advisory','Sensitive data screening','فحص البيانات الحساسة','Sensitive data detection is not connected; this document has not been cleared for sharing.','كشف البيانات الحساسة غير متصل، ولم يُتحقق من صلاحية مشاركة المستند.']])add(key,group,en,ar,'skipped','',[rule,arRule]);
- return checks;
+ if(!workflow)return checks;
+ const configured=checks.filter(c=>!['sponsor','executor','contributor','planning'].includes(c.key)&&!(c.key==='signature'&&!workflow.approval.enabled));
+ for(const phase of ['validation','approval'])for(const stage of enabledStages(workflow,phase)){
+  const role=workflowRole(stage.roleId),prefix=phase==='approval'&&APPROVAL_FIELDS[stage.roleId];
+  const original=prefix&&checks.find(c=>c.key===prefix);
+  const labels=role.label.map(label=>clean(stage.name)===clean(role.label[0])?label:`${stage.name} · ${label}`);
+  configured.push(original?{...original,key:`workflow-${phase}-${stage.id}`,approvalPrefix:prefix,label:labels}:{key:`workflow-${phase}-${stage.id}`,group:'workflow',label:labels,status:'skipped',evidence:'',rule:['Required by the saved settings. Confirm completion for this role in Synergy; this local check cannot authenticate it.','مطلوب وفق الإعدادات المحفوظة. أكد اكتمال دور المسؤول في سينرجي؛ لا يمكن للفحص المحلي توثيقه.'],field:null});
+ }
+ return configured;
 }
-export function makeHoldReview(document) {
+export function makeHoldReview(document,workflow=null) {
  const previous=document.reviews.at(-1),fields={...document.artifact.fields},project=structuredClone(document.project);
- const findings=holdChecks(fields,project);
- return {kind:'project-hold',docId:document.artifact.id,revision:document.artifact.revision,run:(previous?.run||0)+1,fields,project,findings,checks:Object.fromEntries(findings.map(c=>[c.key,c.status])),previous:previous?{...previous.checks}:null};
+ const snapshot=workflow?structuredClone(workflow):null;
+ const findings=holdChecks(fields,project,snapshot);
+ return {kind:'project-hold',docId:document.artifact.id,revision:document.artifact.revision,run:(previous?.run||0)+1,fields,project,workflow:snapshot,findings,checks:Object.fromEntries(findings.map(c=>[c.key,c.status])),previous:previous?{...previous.checks}:null};
 }
 export const holdCounts=review=>Object.fromEntries(['failed','warning','passed','skipped'].map(status=>[status,review.findings.filter(c=>c.status===status).length]));
+
+export const holdProjectValue=(project,field)=>({projectName:project?.name?.[0],manager:project?.owner?.[0],sector:project?.sector})[field];
+
+// The same policy protects both the visible action and the export operation.
+// Empty source fields are missing information, not contradictory source values.
+export function holdDownloadState(document,{run=null,busy=false,workflowVersion=null}={}) {
+ const review=document.reviews.at(-1);
+ const unsaved=document.draft&&HOLD_FIELDS.some(([key])=>(document.draft[key]||'').trim()!==(document.artifact.fields[key]||''));
+ const mismatches=review?.findings.filter(c=>c.group==='consistency'&&c.status==='failed'&&review.fields[c.field]?.trim())||[];
+ const invalid=review?.findings.filter(c=>c.status==='failed'&&(
+  (c.key==='date-order'&&validDate(review.fields.holdDate)&&validDate(review.fields.resumeDate))||
+  (c.group==='approvals'&&Boolean(review.fields[(c.approvalPrefix||c.key)+'Date'])&&!validDate(review.fields[(c.approvalPrefix||c.key)+'Date']))||
+  (HOLD_FIELDS.find(f=>f[0]===c.field)?.[4]==='date'&&Boolean(review.fields[c.field]))
+ ))||[];
+ const missing=review?.findings.filter(c=>c.status==='failed'&&c.group!=='consistency'&&!invalid.includes(c))||[];
+ const reason=busy?'busy':!review?'unchecked':unsaved?'unsaved':review.revision!==document.artifact.revision?'stale':run&&run!==review.run?'historical':workflowVersion&&review.workflow?.version!==workflowVersion?'settings':mismatches.length?'mismatch':invalid.length?'invalid':null;
+ const warnings=review?.findings.filter(c=>c.status==='warning'||c.status==='skipped')||[];
+ return {allowed:!reason,reason,review,mismatches,invalid,missing,warnings,needsAcknowledgement:missing.length>0||warnings.length>0};
+}

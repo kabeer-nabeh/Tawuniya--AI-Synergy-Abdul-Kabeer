@@ -76,7 +76,7 @@ test('forecast scope follows the demo account scope', () => {
   assert.ok(forecastProjectsFor(getAccount('health')).every(p => p.sector === 'Health'));
   assert.ok(forecastProjectsFor(getAccount('technology')).every(p => p.portfolio === 'Technology'));
   assert.deepEqual(forecastProjectsFor(getAccount('afnan')).map(p => p.id).sort(), ['alpha', 'member-app', 'provider-network']);
-  assert.equal(forecastProjectsFor(getAccount('renad')).length, 0);
+  assert.deepEqual(forecastProjectsFor(getAccount('renad')).map(p=>p.id), ['claims']);
 });
 
 test('summary counts add up to the forecast projects', () => {

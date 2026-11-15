@@ -9,19 +9,20 @@ export const ACCOUNTS = [
 ];
 export const ROLES = {
   leadership:{label:['Leadership','القيادة'],capabilities:['assistant','forecasts','quality']},
-  epmo:{label:['EPMO Excellence','تميز إدارة المشاريع'],capabilities:['assistant','documents','validate','forecasts','quality','scan','admin']},
+  epmo:{label:['EPMO Excellence','تميز إدارة المشاريع'],capabilities:['assistant','documents','validate','reviews','forecasts','quality','scan','admin']},
   manager:{label:['Project Manager','مدير مشروع'],capabilities:['assistant','documents','create','validate','forecasts','quality','scan']},
 };
 export const VIEWS = [
   {id:'assistant',label:['AI Assistance','المساعدة الذكية'],icon:'huge-ai-chat'},
   {id:'documents',label:['AI Document Validator','التحقق الذكي من المستندات'],icon:'huge-ai-scan-text'},
+  {id:'reviews',label:['Excellence review','مراجعة فريق التميز'],icon:'huge-ai-scan-text'},
   {id:'forecasts',label:['Forecasts','التوقعات'],icon:'huge-forecast'},
   {id:'quality',label:['Data quality','جودة البيانات'],icon:'huge-data-inspection'},
   {id:'admin',label:['Administration','الإدارة'],icon:'huge-ai-settings'},
 ];
 export const PROJECTS = [
   {id:'alpha',name:['Project Alpha','مشروع ألفا'],sector:'Health',sectorLabel:['Health','الصحة'],portfolio:'Technology',portfolioLabel:['Technology','التقنية'],manager:'afnan',owner:['Afnan Rayyani','أفنان رياني']},
-  {id:'claims',name:['Claims service improvement','تحسين خدمة المطالبات'],sector:'Health',sectorLabel:['Health','الصحة'],portfolio:'Operational Excellence',portfolioLabel:['Operational Excellence','التميز التشغيلي'],manager:'demo-other',owner:['Sample project owner','مالك مشروع تجريبي']},
+  {id:'claims',name:['Claims service improvement','تحسين خدمة المطالبات'],sector:'Health',sectorLabel:['Health','الصحة'],portfolio:'Operational Excellence',portfolioLabel:['Operational Excellence','التميز التشغيلي'],manager:'renad',owner:['Renad Alotaibi','رناد العتيبي']},
   {id:'platform',name:['Platform modernization','تحديث المنصة'],sector:'Strategy and Transformation',sectorLabel:['Strategy & Transformation','الاستراتيجية والتحول'],portfolio:'Technology',portfolioLabel:['Technology','التقنية'],manager:'demo-other',owner:['Sample project owner','مالك مشروع تجريبي']},
 ];
 export const getAccount = id => ACCOUNTS.find(account=>account.id===id);

@@ -1,4 +1,9 @@
-import { createHoldDocument } from './project-hold.js';
+import { createWorkflowStore,freshWorkflowAdmin,loadWorkflowDraft,workflowSnapshot,workflowDirty,requestWorkflowType,saveWorkflow,addWorkflowStage,removeWorkflowStage,moveWorkflowStage,setWorkflowEnabled,updateWorkflowStage } from './workflow-config.js';
+import { workflowAdminUI } from './workflow-config-ui.js';
+import { createHoldDocument,holdProjectValue,holdDownloadState,HOLD_FIELDS } from './project-hold.js';
+import { freshExcellence,selectReviewSource,reviewSample,runExcellenceReview,reviewReadiness,changeReviewContext,reviewerSummaryText,openSubmittedDocument,returnToReviewInbox,preserveSubmission } from './excellence-review.js';
+import { excellenceReviewUI } from './excellence-review-ui.js';
+import { exportHoldDocument } from './project-hold-export.js';
 import { holdEditor } from './project-hold-ui.js';
 import { createArtifact, makeReview } from './artifact-review.js';
 import { getAccount, can, canReadAlpha, projectsFor, documentIdsFor } from './demo-access.js';
@@ -7,7 +12,7 @@ import { platformShell, PLATFORM_TABS } from './platform-shell.js';
 import { assistanceChat, freshAssistance } from './assistance-chat.js';
 import { workspaceIcons } from '../public/vendor/hugeicons/workspace-icons.js';
 import { freshValidator, validatorDocument, checkDocument, saveDocument, documentValidatorUI, addUploadedDocument } from './document-validator.js';
-import { emptyUpload, readUploadSelection, removeUploadFile, uploadSetup, resolvedUploadTemplate } from './document-upload.js';
+import { emptyUpload, readUploadSelection, readUploadedFile, removeUploadFile, uploadSetup, resolvedUploadTemplate } from './document-upload.js';
 import { forecastUI, freshForecast, MAX_SCENARIOS } from './forecast-view.js';
 import { freshAuthoring, createDraft, pendingField, answerField, skipField, editField, parseTyped, commandOf, fieldOf, templateOf as authoringTemplate, validatorFields, isComplete as authoringComplete } from './document-create.js';
 import { authoringUI } from './document-create-view.js';
@@ -77,17 +82,21 @@ const account = () => getAccount(state.accountId);
 const allowed = capability => can(account(),capability);
 const documentsForAccount = () => templates.filter(doc=>documentIdsFor(account()).includes(doc.id));
 state.validator=freshValidator();
+state.excellence=freshExcellence();
+const workflowStore=createWorkflowStore();
+state.workflowAdmin=freshWorkflowAdmin();
 state.forecast=freshForecast();
 state.authoring=freshAuthoring();
 const forecast=()=>forecastUI({t,icon,escape,account:account(),fc:state.forecast});
 state.quality=freshQuality();
 const quality=()=>qualityUI({t,icon,escape,account:account(),q:state.quality});
-const validatorDocumentsForAccount=()=>!allowed('validate')?[]:[...state.validator.uploads.map(upload=>({id:upload.id,name:()=>upload.name,meta:()=>t('Uploaded this session','مرفوع في هذه الجلسة')+' · '+upload.extension.toUpperCase(),upload:true})),...projectsFor(account()).slice(0,1).map(project=>({id:'hold-'+project.id,hold:true,project,name:()=>t('Project Hold','تعليق المشروع')+' · '+t(...project.name),meta:()=>t('Sample with findings · EPMO','نموذج مع ملاحظات · إدارة المشاريع')})),...documentsForAccount()];
-const validatorPage=()=>documentValidatorUI({t,icon,escape,documents:validatorDocumentsForAccount(),validator:state.validator,definitions:reviewDefinitions,canCreate:allowed('create'),projects:projectsFor(account())});
+const validatorDocumentsForAccount=()=>!allowed('validate')?[]:[...state.validator.uploads.map(upload=>({id:upload.id,name:()=>upload.name,meta:()=>t('Uploaded this session','مرفوع في هذه الجلسة')+' · '+upload.extension.toUpperCase(),upload:true})),...projectsFor(account()).map(project=>({id:'hold-'+project.id,hold:true,project,name:()=>t('Project Hold','تعليق المشروع')+' · '+t(...project.name),meta:()=>t('Sample with findings · EPMO','نموذج مع ملاحظات · إدارة المشاريع')})),...documentsForAccount()];
+const validatorPage=()=>documentValidatorUI({t,icon,escape,documents:validatorDocumentsForAccount(),validator:state.validator,definitions:reviewDefinitions,canCreate:allowed('create'),projects:projectsFor(account()),workflowVersion:workflowStore.configs['project-hold'].version});
+const workflowAdminPage=()=>{if(!state.workflowAdmin.draft)loadWorkflowDraft(state.workflowAdmin,workflowStore);return workflowAdminUI({ui:state.workflowAdmin,store:workflowStore,account:account(),t,icon,escape});};
 const foundation = () => foundationUI({t,icon,escape,account:account(),state,validationPicker,documentValidator:validatorPage});
 const accountSessions = new Map();
-const sessionKeys=['authoring','forecast','quality','validator','assistance','activeView','documentMode','viewScroll','chatDraft','chatScroll','unread','conversations','active','attachment','feedback','editDrafts','editor','openDetails','reviewEvidence'];
-function freshSession(){return {authoring:freshAuthoring(),forecast:freshForecast(),quality:freshQuality(),validator:freshValidator(),assistance:freshAssistance(),activeView:'assistant',documentMode:'validate',viewScroll:{},chatDraft:'',chatScroll:0,unread:false,conversations:[],active:null,attachment:null,feedback:new Set(),editDrafts:{},editor:null,openDetails:[],reviewEvidence:null};}
+const sessionKeys=['authoring','forecast','quality','validator','excellence','workflowAdmin','assistance','activeView','documentMode','viewScroll','chatDraft','chatScroll','unread','conversations','active','attachment','feedback','editDrafts','editor','openDetails','reviewEvidence'];
+function freshSession(){return {authoring:freshAuthoring(),forecast:freshForecast(),quality:freshQuality(),validator:freshValidator(),excellence:freshExcellence(),workflowAdmin:freshWorkflowAdmin(),assistance:freshAssistance(),activeView:'assistant',documentMode:'validate',viewScroll:{},chatDraft:'',chatScroll:0,unread:false,conversations:[],active:null,attachment:null,feedback:new Set(),editDrafts:{},editor:null,openDetails:[],reviewEvidence:null};}
 function captureWorkspace(){
   const floatingInput=document.querySelector('#assistance-message');if(floatingInput)state.assistance.draft=floatingInput.value;
   const floatingMain=document.querySelector('#assistance-messages');if(floatingMain)state.assistance.scroll=floatingMain.scrollTop;
@@ -145,7 +154,7 @@ function composer() {
 function welcome() {
   return `<section class="welcome" aria-labelledby="welcome-title">
     <div class="welcome-heading"><div class="welcome-symbol">${icon('assistant')}</div><h1 id="welcome-title">${t('How can I help you today?','كيف أستطيع مساعدتك اليوم؟')}</h1></div>
-    <p class="welcome-description">${t('Ask about the projects and KPIs in your scope.','اسأل عن المشاريع ومؤشرات الأداء ضمن نطاقك.')}</p>
+
     ${composer()}
     <div class="suggested-prompts"><p class="prompts-label" id="prompts-label">${t('Try asking','جرّب أن تسأل')}</p>
     <div class="starters" aria-labelledby="prompts-label">
@@ -182,18 +191,59 @@ function runStandaloneValidation(id) {
   const validator=state.validator,descriptor=validatorDocumentsForAccount().find(doc=>doc.id===id);
   if(descriptor.hold&&!validator.documents[id]?.kind)validator.documents[id]=createHoldDocument(id,descriptor.project);
   const document=validatorDocument(validator,id),identity=state.accountId;
+  const workflow=workflowSnapshot(workflowStore,document.kind==='project-hold'?'project-hold':document.upload?.templateId||(id==='quarterly'?'quarterly-report':'project-status'));
   validator.selected=id;validator.run=null;validator.filter='all';validator.busy=id;
   state.drawer=null;state.activeView='documents';state.documentMode='validate';state.hostTab='synergy';state.viewScroll.documents=0;
   render({capture:false});
   // The short progress state represents local field checks, not file extraction or AI inference.
   setTimeout(()=>{
-    const review=checkDocument(document);validator.run=review.run;validator.busy=null;
+    const review=checkDocument(document,workflow);validator.run=review.run;validator.busy=null;
+    if(document.kind==='project-hold'&&review.findings.some(c=>c.status==='failed'))validator.filter='failed';
     if(state.accountId!==identity||state.validator!==validator)return;
     render();
     if(state.activeView==='documents'&&validator.selected===id&&!state.drawer)documentFocus();
   },450);
 }
+function saveAdminWorkflow(switchAfter=false){
+  if(!allowed('admin'))return;
+  const ui=state.workflowAdmin,next=ui.pendingType;
+  const ok=saveWorkflow(ui,workflowStore,account());
+  if(ok&&switchAfter&&next)loadWorkflowDraft(ui,workflowStore,next);
+  render();
+  if(ok)toast(t('Settings saved for new checks.','تم حفظ الإعدادات للفحوصات الجديدة.'));
+  document.querySelector(ok?'#wa-save':'[aria-invalid="true"]')?.focus();
+}
+function updateAdminSaveState(){
+  const ui=state.workflowAdmin,dirty=workflowDirty(ui,workflowStore);
+  const save=document.querySelector('#wa-save');if(save)save.disabled=!dirty&&ui.draft.configured;
+  const cancel=document.querySelector('[data-action="wa-cancel"]');if(cancel)cancel.disabled=!dirty;
+  const status=document.querySelector('#wa-dirty');if(status)status.textContent=dirty?t('Unsaved changes','تغييرات غير محفوظة'):t('Saved','محفوظ');
+  const note=document.querySelector('#wa-save-notice');if(note)note.textContent='';
+}
 function documentFocus(){document.querySelector('#validator-heading')?.setAttribute('tabindex','-1');document.querySelector('#validator-heading')?.focus({preventScroll:true});}
+function closeReviewOptions(){if(state.excellence.upload.reading)removeUploadFile(state.excellence.upload);state.excellence.showOptions=false;render();document.querySelector('[data-action="review-options"]')?.focus();}
+function reviewFocus(){state.viewScroll.reviews=0;render({capture:false});document.querySelector('#excellence-heading')?.focus({preventScroll:true});}
+async function chooseExcellenceFiles(files) {
+  if(!allowed('reviews')||!files.length||state.excellence.busy)return;
+  const review=state.excellence,identity=account();
+  preserveSubmission(review);review.activeSubmission=null;
+  review.source=null;review.phase='intake';review.showOptions=true;review.error=null;
+  const pending=readUploadSelection(review.upload,files,file=>readUploadedFile(file,{detectVisuals:true}));render();
+  const current=await pending;
+  if(!current||review!==state.excellence)return;
+  if(review.upload.file)selectReviewSource(review,review.upload.file,identity);
+  reviewFocus();
+}
+function startExcellenceReview() {
+  if(!allowed('reviews')||reviewReadiness(state.excellence,account())!=='ready')return;
+  const review=state.excellence,identity=account(),workflow=workflowSnapshot(workflowStore,state.excellence.context.typeId);review.busy=true;review.error=null;reviewFocus();
+  setTimeout(()=>{
+    review.busy=false;
+    try{runExcellenceReview(review,identity,{workflow});}catch{review.error='review-failed';}
+    if(state.excellence!==review||state.accountId!==identity.id||state.activeView!=='reviews')return;
+    reviewFocus();
+  },350);
+}
 function openStandaloneEditor(id,field) {
   if(!validatorDocumentsForAccount().some(doc=>doc.id===id)||state.validator.busy)return;
   const entry=validatorDocument(state.validator,id);
@@ -366,7 +416,7 @@ function aiWorkspace() {
   const assistant=state.activeView==='assistant';
   const assistanceOpen=state.chatView!=='closed';
   const assistantPage=assistanceOpen?`<div class="assistant-elsewhere">${mark()}<h2>${t('AI Assistance is open','المساعدة الذكية مفتوحة')}</h2><p>${t('Your chat is available in the assistance panel. Close it to continue working here.','محادثتك متاحة في لوحة المساعدة. أغلقها لمتابعة العمل هنا.')}</p><button class="secondary-button" data-action="chat-close">${icon('chat')}${t('Return to workspace assistant','العودة إلى مساعد مساحة العمل')}</button></div>`:active()?messages():welcome();
-  const page=assistant?assistantPage:state.activeView==='documents'?(state.documentMode==='create'&&allowed('create')?authoring().page():foundation().documentsPage()):state.activeView==='forecasts'?forecast().page():state.activeView==='quality'?quality().page():state.activeView==='admin'?foundation().adminPage():foundation().overviewPage(state.activeView);
+  const page=assistant?assistantPage:state.activeView==='reviews'?excellenceReviewUI({state:state.excellence,account:account(),t,icon,escape}):state.activeView==='documents'?(state.documentMode==='create'&&allowed('create')?authoring().page():foundation().documentsPage()):state.activeView==='forecasts'?forecast().page():state.activeView==='quality'?quality().page():state.activeView==='admin'?workflowAdminPage():foundation().overviewPage(state.activeView);
   const shell=assistant||state.activeView==='documents';
   return `<section class="embedded-ai-workspace" aria-label="${t('AI Synergy workspace','مساحة عمل AI Synergy')}"><header class="embedded-ai-heading">${foundation().navigation()}<span class="scope-tag">${icon('briefcase')}${foundation().scope}</span>${embeddedWorkspace?`<button class="sign-out-button" data-action="sign-out" title="${t('Sign out of AI Synergy','تسجيل الخروج من AI Synergy')}">${icon('sign-out')}<span>${t('Sign out','تسجيل الخروج')}</span></button>`:''}</header><div class="embedded-ai-body">${shell?sidebar():''}<div id="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-${shell?'assistant':state.activeView}" class="workspace ${assistant&&active()?'has-conversation':''} ${assistant?'assistant-workspace':'task-workspace'}">${shell?foundation().taskSwitch():''}<main id="main" tabindex="-1" data-view="${state.activeView}">${page}</main>${assistant&&active()&&!assistanceOpen?`<div class="conversation-composer">${composer()}</div>`:''}</div></div></section>`;
 }
@@ -617,6 +667,8 @@ function render({focus=false,scroll=false,responseStart=false,resetScroll=false,
   if(scroll&&state.activeView==='assistant')main?.scrollTo({top:1e6,behavior:'instant'});
   if(responseStart&&state.activeView==='assistant'){const last=main?.querySelector('.assistant-turn:last-of-type');if(last)main.scrollTo({top:main.scrollTop+last.getBoundingClientRect().top-main.getBoundingClientRect().top-16,behavior:'instant'});}
   const floatingMain=document.querySelector('#assistance-messages');floatingMain?.scrollTo({top:assistScroll?1e6:state.assistance.scroll,behavior:'instant'});
+  const reviewDialog=document.querySelector('#er-submission-options');
+  if(reviewDialog&&state.excellence.showOptions&&!reviewDialog.open){reviewDialog.showModal();reviewDialog.querySelector('[data-action="review-options"]')?.focus();}
 }
 function closeChat() {
   captureWorkspace();state.chatView='closed';if(state.panelSurface==='floating')state.drawer=null;
@@ -647,8 +699,8 @@ function starter(kind){send(starterText(kind),kind);}
 function openPanel(type,source){if(['validation','documents','editor','review-evidence'].includes(type)&&!allowed('validate'))return;if(type==='source'&&!canReadAlpha(account()))return;returnFocus=document.activeElement;state.panelSurface=document.activeElement?.closest('.assistance-shell')?'floating':'host';state.drawer=type;state.source=source||null;render();}
 function closePanel(){state.drawer=null;render();const action=returnFocus?.dataset.action;const source=returnFocus?.dataset.source;const returnId=returnFocus?.dataset.id;const returnKey=returnFocus?.dataset.key;const target=action==='dq-open'&&returnKey?(document.querySelector(`#main [data-action="dq-open"][data-key="${CSS.escape(returnKey)}"]`)||document.querySelector('#main')):action==='dq-rules'?document.querySelector('#main [data-action="dq-rules"]'):action==='forecast-open'&&returnId?document.querySelector(`#main [data-action="forecast-open"][data-id="${returnId}"]`)||document.querySelector('#main'):source?document.querySelector(`[data-action="source"][data-source="${source}"]`):action?document.querySelector(`[data-action="${action}"]`):document.querySelector('#message');target?.focus();}
 
-app.addEventListener('input',event=>{if(event.target.id==='assistance-message'){state.assistance.draft=event.target.value;document.querySelector('#assistance-composer .send-button').disabled=state.assistance.busy||!event.target.value.trim();}if(event.target.closest('#artifact-editor')){state.editor.fields[event.target.name]=event.target.value;document.querySelector('#period-end')?.setCustomValidity('');document.querySelector('#editor-state').textContent=t('Unsaved changes','تغييرات غير محفوظة');}if(event.target.id==='message'){syncSend();event.target.style.height='auto';event.target.style.height=Math.min(event.target.scrollHeight,180)+'px';}});
-app.addEventListener('submit',event=>{if(event.target.id==='ac-composer'){event.preventDefault();acSend();return;}if(event.target.id==='assistance-composer'){event.preventDefault();sendAssistance(state.assistance.draft);return;}if(event.target.id==='artifact-editor'){event.preventDefault();saveArtifact(event.submitter?.value==='rerun');return;}if(event.target.id==='composer'){event.preventDefault();const text=document.querySelector('#message').value.trim();const kind=intent(text);if(kind.startsWith('validation:'))runValidation(kind.split(':')[1],text);else send(text,kind);}});
+app.addEventListener('input',event=>{if(event.target.dataset.workflowField==='name'&&allowed('admin')){updateWorkflowStage(state.workflowAdmin,event.target.dataset.workflowPhase,event.target.dataset.workflowStage,{name:event.target.value},account());updateAdminSaveState();return;}if(event.target.id==='review-inbox-search'&&allowed('reviews')){const position=event.target.selectionStart;state.excellence.queueQuery=event.target.value;render();const input=document.querySelector('#review-inbox-search');input?.focus();try{input?.setSelectionRange(position,position);}catch{}return;}if(event.target.id==='assistance-message'){state.assistance.draft=event.target.value;document.querySelector('#assistance-composer .send-button').disabled=state.assistance.busy||!event.target.value.trim();}if(event.target.closest('#artifact-editor')){state.editor.fields[event.target.name]=event.target.value;document.querySelector('#period-end')?.setCustomValidity('');document.querySelector('#editor-state').textContent=t('Unsaved changes','تغييرات غير محفوظة');}if(event.target.id==='message'){syncSend();event.target.style.height='auto';event.target.style.height=Math.min(event.target.scrollHeight,180)+'px';}});
+app.addEventListener('submit',event=>{if(event.target.id==='workflow-admin-form'){event.preventDefault();saveAdminWorkflow();return;}if(event.target.id==='ac-composer'){event.preventDefault();acSend();return;}if(event.target.id==='assistance-composer'){event.preventDefault();sendAssistance(state.assistance.draft);return;}if(event.target.id==='artifact-editor'){event.preventDefault();saveArtifact(event.submitter?.value==='rerun');return;}if(event.target.id==='composer'){event.preventDefault();const text=document.querySelector('#message').value.trim();const kind=intent(text);if(kind.startsWith('validation:'))runValidation(kind.split(':')[1],text);else send(text,kind);}});
 // Create a document: composer text, table cells and the project picker.
 app.addEventListener('input',event=>{
   const el=event.target,a=state.authoring;
@@ -658,10 +710,35 @@ app.addEventListener('input',event=>{
 app.addEventListener('keydown',event=>{if(event.target.id==='ac-message'&&event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();acSend();}});
 app.addEventListener('change',event=>{if(event.target.id==='ac-project'&&allowed('create')){state.authoring.setup.projectId=event.target.value;render();document.querySelector('#ac-project')?.focus();}});
 app.addEventListener('change',event=>{
+  if(allowed('admin')&&(event.target.id==='wa-document-type'||event.target.dataset.workflowEnabled||event.target.dataset.workflowField==='roleId')){
+    const ui=state.workflowAdmin;
+    if(event.target.id==='wa-document-type')requestWorkflowType(ui,workflowStore,event.target.value);
+    else if(event.target.dataset.workflowEnabled)setWorkflowEnabled(ui,event.target.dataset.workflowEnabled,event.target.checked,account());
+    else updateWorkflowStage(ui,event.target.dataset.workflowPhase,event.target.dataset.workflowStage,{roleId:event.target.value},account());
+    render();document.querySelector('#'+event.target.id)?.focus();return;
+  }
+  if(event.target.id==='review-inbox-filter'&&allowed('reviews')){state.excellence.queueFilter=event.target.value;render();document.querySelector('#review-inbox-filter')?.focus();}
   if(event.target.id==='validator-run'&&allowed('validate')){state.validator.run=Number(event.target.value);state.validator.filter='all';render();document.querySelector('#validator-run')?.focus();}
   if(event.target.id==='validator-project'&&allowed('validate')){state.validator.upload.projectId=event.target.value;render();document.querySelector('#validator-project')?.focus();}
   if(event.target.id==='validator-file')chooseUploadedFiles([...event.target.files]);
+  if(event.target.id==='excellence-file')chooseExcellenceFiles([...event.target.files]);
+  if(['excellence-type','excellence-project','excellence-confirm','excellence-run'].includes(event.target.id)&&allowed('reviews')){
+    const review=state.excellence;
+    if(event.target.id==='excellence-type'){review.context.typeId=event.target.value;review.context.confirmed=false;}
+    if(event.target.id==='excellence-project'){review.context.projectId=event.target.value;review.context.confirmed=false;}
+    if(event.target.id==='excellence-confirm')review.context.confirmed=event.target.checked;
+    if(event.target.id==='excellence-run'){review.run=Number(event.target.value);review.filter='all';}
+    render();document.querySelector('#'+event.target.id)?.focus();
+  }
   if(event.target.id==='validator-template'&&allowed('validate')){state.validator.upload.templateId=event.target.value;render();document.querySelector('#validator-template')?.focus();}
+  if(event.target.id==='hold-download-ack'&&allowed('validate')){
+    const entry=state.validator.documents[state.validator.selected];
+    if(entry?.kind!=='project-hold')return;
+    entry.downloadAcknowledged=event.target.checked?entry.reviews.at(-1)?.run:null;
+    const policy=holdDownloadState(entry,{run:state.validator.run,busy:state.validator.busy===entry.artifact.id,workflowVersion:workflowStore.configs['project-hold'].version});
+    const download=document.querySelector('[data-action="validator-download"]');
+    if(download)download.disabled=!policy.allowed||(policy.needsAcknowledgement&&!event.target.checked);
+  }
   // Forecasts: Projects menu, what-if target and sliders (sliders recalculate on release).
   if(event.target.id==='fc-view'&&allowed('forecasts')){const fc=state.forecast;fc.view=event.target.value;fc.outcome=null;fc.driver=null;fc.group=null;fc.showAll=false;fc.whatIf={target:'all',values:{}};render();document.querySelector('#fc-view')?.focus();}
   if((event.target.id==='fc-measure'||event.target.id==='fc-horizon')&&allowed('forecasts')){const fc=state.forecast;fc[event.target.id==='fc-measure'?'measure':'horizon']=event.target.value;fc.outcome=null;fc.showAll=false;render();document.querySelector('#'+event.target.id)?.focus();}
@@ -697,9 +774,9 @@ app.addEventListener('pointerout',event=>{
   const wrap=event.target.closest?.('[data-chart]');if(!wrap||wrap.contains(event.relatedTarget))return;
   wrap.querySelector('.fc-tooltip')?.setAttribute('hidden','');wrap.querySelector('.fc-hover-line')?.setAttribute('visibility','hidden');
 });
-app.addEventListener('dragover',event=>{const zone=event.target.closest('[data-upload-zone]');if(zone){event.preventDefault();zone.classList.add('drag-over');}});
-app.addEventListener('dragleave',event=>event.target.closest('[data-upload-zone]')?.classList.remove('drag-over'));
-app.addEventListener('drop',event=>{const zone=event.target.closest('[data-upload-zone]');if(zone){event.preventDefault();zone.classList.remove('drag-over');chooseUploadedFiles([...event.dataTransfer.files]);}});
+app.addEventListener('dragover',event=>{const zone=event.target.closest('[data-upload-zone],[data-review-upload-zone]');if(zone){event.preventDefault();zone.classList.add('drag-over');}});
+app.addEventListener('dragleave',event=>event.target.closest('[data-upload-zone],[data-review-upload-zone]')?.classList.remove('drag-over'));
+app.addEventListener('drop',event=>{const zone=event.target.closest('[data-upload-zone],[data-review-upload-zone]');if(zone){event.preventDefault();zone.classList.remove('drag-over');if(zone.hasAttribute('data-review-upload-zone'))chooseExcellenceFiles([...event.dataTransfer.files]);else chooseUploadedFiles([...event.dataTransfer.files]);}});
 app.addEventListener('keydown',event=>{
   const tab=event.target.closest('.workspace-tab');
   if(tab&&['ArrowLeft','ArrowRight','Home','End'].includes(event.key)){
@@ -741,8 +818,47 @@ app.addEventListener('click',async event=>{
   else if(action==='navigate'){if(button.closest('.assistance-shell'))state.chatView='closed';navigate(button.dataset.view);if(button.getAttribute('role')==='tab')document.querySelector('#workspace-tab-'+button.dataset.view)?.focus();}
   else if(action==='assistant-task'){const task=button.dataset.task;if(task==='ask'){navigate('assistant');}else if(allowed(task==='create'?'create':'validate')&&allowed('documents')){state.documentMode=task;navigate('documents');}document.querySelector(`[data-action="assistant-task"][data-task="${task}"]`)?.focus();}
   else if(action==='document-mode'){if(!allowed('documents'))return;state.documentMode=button.dataset.mode==='create'&&allowed('create')?'create':'validate';render();document.querySelector(`[data-action="document-mode"][data-mode="${state.documentMode}"]`)?.focus();}
+  else if(['wa-add','wa-remove','wa-move','wa-cancel','wa-save-switch','wa-discard-switch','wa-stay'].includes(action)){
+    if(!allowed('admin'))return;const ui=state.workflowAdmin,phase=button.dataset.phase;
+    if(action==='wa-save-switch'){saveAdminWorkflow(true);return;}
+    if(action==='wa-add')addWorkflowStage(ui,phase,account());
+    if(action==='wa-remove')removeWorkflowStage(ui,phase,id,account());
+    if(action==='wa-move')moveWorkflowStage(ui,phase,id,Number(button.dataset.direction),account());
+    if(action==='wa-cancel')loadWorkflowDraft(ui,workflowStore);
+    if(action==='wa-discard-switch')loadWorkflowDraft(ui,workflowStore,ui.pendingType);
+    if(action==='wa-stay')ui.pendingType=null;
+    render();
+    if(action==='wa-add')document.querySelector(`#wa-name-${phase}-${ui.draft[phase].stages.at(-1).id}`)?.focus();
+    else document.querySelector('#wa-document-type')?.focus();
+  }
+  else if(['review-sample','review-intake','review-context','review-run','review-filter','review-latest','review-locate','review-copy','review-open-submission','review-clear-inbox','review-options','review-confirm-run'].includes(action)){
+    if(!allowed('reviews')||state.excellence.busy)return;
+    const review=state.excellence;
+    if(action==='review-options'){if(review.showOptions)closeReviewOptions();else{review.showOptions=true;render();}}
+    else if(action==='review-open-submission'){openSubmittedDocument(review,id,account());reviewFocus();}
+    else if(action==='review-clear-inbox'){review.queueFilter='all';review.queueQuery='';render();document.querySelector('#review-inbox-search')?.focus();}
+    else if(action==='review-sample'){
+      const project=projectsFor(account())[0];if(!project)return;
+      review.upload.token++;review.upload.reading=false;review.upload.error=null;
+      selectReviewSource(review,reviewSample(id,project),account());
+      reviewFocus();
+    }else if(action==='review-intake'){returnToReviewInbox(review,account());reviewFocus();}
+    else if(action==='review-context'){changeReviewContext(review,account());reviewFocus();}
+    else if(action==='review-confirm-run'){if(['ready','confirmation'].includes(reviewReadiness(review,account()))){review.context.confirmed=true;startExcellenceReview();}}
+    else if(action==='review-run')startExcellenceReview();
+    else if(action==='review-filter'){review.filter=['all','attention','failed','warning','passed','manual'].includes(id)?id:'all';render();document.querySelector(`[data-action="review-filter"][data-id="${review.filter}"]`)?.focus();}
+    else if(action==='review-latest'){review.run=review.reports.at(-1)?.run;review.filter='all';reviewFocus();}
+    else if(action==='review-locate'){const section=document.querySelector('#review-section-'+id);if(section){section.open=true;section.scrollIntoView({block:'nearest'});section.focus({preventScroll:true});}}
+    else if(action==='review-copy'){
+      const report=review.reports.find(r=>r.run===review.run)||review.reports.at(-1);if(!report)return;
+      try{await navigator.clipboard.writeText(reviewerSummaryText(report));toast(t('Reviewer summary copied.','تم نسخ ملخص المراجع.'));}
+      catch{toast(t('Copy is unavailable. Select the section summary text to copy it manually.','النسخ غير متاح. حدد نص ملخص الأقسام لنسخه يدويًا.'));}
+    }
+  }
   else if(action==='validator-open'){
     if(!validatorDocumentsForAccount().some(doc=>doc.id===id))return;
+    const descriptor=validatorDocumentsForAccount().find(doc=>doc.id===id);
+    if(descriptor.hold)state.validator.upload.projectId=descriptor.project.id;
     const document=validatorDocument(state.validator,id);
     if(document.reviews.length){state.validator.selected=id;state.validator.run=null;state.validator.filter='all';state.viewScroll.documents=0;render({capture:false});documentFocus();}
     else runStandaloneValidation(id);
@@ -761,6 +877,30 @@ app.addEventListener('click',async event=>{
   else if(action==='validator-recheck')runStandaloneValidation(id);
   else if(action==='validator-back'){state.validator.selected=null;state.viewScroll.documents=0;render({capture:false});documentFocus();}
   else if(action==='validator-edit')openStandaloneEditor(id,button.dataset.field);
+  else if(action==='hold-use-project'){
+    if(!allowed('validate')||state.editor?.surface!=='validator')return;
+    const entry=state.validator.documents[state.editor.docId],field=button.dataset.field;
+    if(entry?.kind!=='project-hold'||!HOLD_FIELDS.some(f=>f[0]===field))return;
+    const value=holdProjectValue(entry.project,field);
+    if(!value)return;
+    state.editor.fields[field]=value;
+    const input=document.querySelector('#hold-'+field);if(input){input.value=value;input.focus();}
+    document.querySelector('#editor-state').textContent=t('Unsaved changes','تغييرات غير محفوظة');
+    toast(t('Project value added to your draft. Save and recheck to update findings.','أُضيفت قيمة المشروع إلى المسودة. احفظ وأعد الفحص لتحديث النتائج.'));
+  }
+  else if(action==='hold-download-options'){const section=document.querySelector('#hold-download-title');section?.scrollIntoView({block:'start'});section?.focus({preventScroll:true});}
+  else if(action==='validator-download'){
+    if(!allowed('validate')||!validatorDocumentsForAccount().some(doc=>doc.id===id))return;
+    const entry=state.validator.documents[id];if(entry?.kind!=='project-hold')return;
+    try {
+      const file=exportHoldDocument(entry,{run:state.validator.run,busy:state.validator.busy===id,acknowledged:entry.downloadAcknowledged===entry.reviews.at(-1)?.run,workflowVersion:workflowStore.configs['project-hold'].version});
+      const url=URL.createObjectURL(new Blob([file.bytes],{type:file.mime}));
+      const link=Object.assign(document.createElement('a'),{href:url,download:file.filename});document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+      entry.downloaded={run:entry.reviews.at(-1).run,revision:entry.artifact.revision};render();
+      document.querySelector('[data-action="validator-download"]')?.focus();
+      toast(t('Word draft downloaded. Review and submit manually in Synergy.','تم تنزيل مسودة Word. راجعها وأرسلها يدويًا في سينرجي.'));
+    } catch {toast(t('Download is not ready. Save, recheck and resolve the items shown above.','التنزيل غير جاهز. احفظ وأعد الفحص وعالج العناصر الموضحة أعلاه.'));}
+  }
   else if(action==='validator-filter'){if(!allowed('validate'))return;state.validator.filter=button.dataset.filter;render();document.querySelector(`[data-action="validator-filter"][data-filter="${state.validator.filter}"]`)?.focus();}
   else if(action==='validator-latest'){state.validator.run=null;render();document.querySelector('#validator-run')?.focus();}
   else if(action==='validator-locate'){
@@ -976,8 +1116,10 @@ app.addEventListener('click',async event=>{
   else if(action==='feedback'){const key=active().id+':'+index;state.feedback.has(key)?state.feedback.delete(key):state.feedback.add(key);button.classList.toggle('selected',state.feedback.has(key));button.setAttribute('aria-pressed',String(state.feedback.has(key)));toast(t('Feedback updated for this session.','تم تحديث التقييم لهذه الجلسة.'));}
   else if(action==='copy'){try{await navigator.clipboard.writeText(button.closest('.assistant-turn').querySelector('.response-content').innerText);toast(t('Response copied.','تم نسخ الإجابة.'));}catch{toast(t('Clipboard unavailable. Select the response text to copy.','الحافظة غير متاحة. حدّد نص الإجابة لنسخه.'));}}
 });
+app.addEventListener('cancel',event=>{if(event.target.id==='er-submission-options'){event.preventDefault();closeReviewOptions();}},true);
 document.addEventListener('keydown',event=>{
   if(event.key==='Escape'){
+    if(document.querySelector('#er-submission-options[open]')){event.preventDefault();closeReviewOptions();return;}
     if(state.drawer)closePanel();
     else if(state.chatView==='expanded'){state.chatView='compact';render();document.querySelector('[data-action="chat-expand"]')?.focus();}
     else if(state.chatView==='compact')closeChat();

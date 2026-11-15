@@ -24,7 +24,8 @@ test('sector, portfolio and assignment scopes select only their own records',()=
   assert.deepEqual(projectsFor(getAccount('health')).map(project=>project.id),['alpha','claims']);
   assert.deepEqual(projectsFor(getAccount('technology')).map(project=>project.id),['alpha','platform']);
   assert.deepEqual(projectsFor(getAccount('afnan')).map(project=>project.id),['alpha']);
-  assert.deepEqual(projectsFor(getAccount('renad')),[]);
+  assert.deepEqual(projectsFor(getAccount('renad')).map(project=>project.id),['claims']);
+  assert.deepEqual(projectsFor({...getAccount('renad'),scope:{type:'manager',value:'unassigned'}}),[]);
 });
 test('sample documents respect validation capability and project assignment',()=>{
   assert.deepEqual(documentIdsFor(getAccount('epmo')),['quarterly','project']);

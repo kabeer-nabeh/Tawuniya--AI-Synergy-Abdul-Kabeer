@@ -88,7 +88,8 @@ test('scope follows the account: managers see projects only, sector heads see th
   assert.ok([...health.kpis].every(id => datasetFor('current').kpis.find(k => k.id === id).sector === 'Health') && health.kpis.size > 0);
   assert.equal(afnan.kpis.size, 0);
   assert.deepEqual([...afnan.projects].sort(), ['alpha', 'member-app', 'provider-network']);
-  assert.equal(renad.projects.size + renad.kpis.size, 0);
+  assert.deepEqual([...renad.projects], ['claims']);
+  assert.equal(renad.kpis.size, 0);
 });
 
 test('only EPMO and project managers can scan and review; only EPMO can configure', () => {

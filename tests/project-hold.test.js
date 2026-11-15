@@ -47,7 +47,7 @@ test('labeled extraction preserves dates for validation and rejects next-heading
  const multiline=extractHoldFields('Project Manager\nAfnan Rayyani\nProject hold reason\nAwaiting agreement');
  assert.equal(multiline.manager,'Afnan Rayyani');assert.equal(multiline.reason,'Awaiting agreement');
 });
-test('report exposes skipped reasons, escapes fields and preserves correction hooks',()=>{
+test('report exposes skipped reasons, escaped evidence and finding-specific correction actions',()=>{
  const doc=createHoldDocument('hold-alpha',project);doc.artifact.fields.reason='<img onerror=alert(1)>';
  checkDocument(doc);
  const escape=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
@@ -55,6 +55,7 @@ test('report exposes skipped reasons, escapes fields and preserves correction ho
  const html=holdReport(ctx);
  assert.ok(html.includes('&lt;script>report'));assert.ok(!html.includes('<img onerror'));
  assert.ok(html.includes('Signature verification is not connected'));
+ assert.ok(html.includes('validator-edit'),'the owner can correct review fields');
  assert.ok(html.includes('data-field="hold-resumeDate"'));
  assert.ok(holdEditor({...ctx,fields:doc.artifact.fields}).includes('name="planningName"'));
 });
@@ -74,7 +75,7 @@ test('Project Hold setup guides to an in-scope project before offering validatio
 test('library, report and old revisions render through the shared validator in both languages',()=>{
  const validator=freshValidator(),doc=createHoldDocument('hold-alpha',project);
  validator.documents['hold-alpha']=doc;checkDocument(doc);
- const descriptor={id:'hold-alpha',hold:true,name:()=> 'Project Hold · Project Alpha',meta:()=> 'Sample'};
+ const descriptor={id:'hold-alpha',hold:true,project,name:()=> 'Project Hold · Project Alpha',meta:()=> 'Sample'};
  const ctx={t:en=>en,icon:()=>'',escape:s=>String(s),documents:[descriptor],validator,definitions:()=>[],projects:[project]};
  assert.match(documentValidatorUI(ctx),/Needs revision/);
  validator.selected=descriptor.id;
@@ -84,7 +85,7 @@ test('library, report and old revisions render through the shared validator in b
  assert.match(documentValidatorUI(ctx),/Local checks passed; human review remains/);
  validator.run=1;
  const old=documentValidatorUI(ctx);
- assert.match(old,/Saved changes need a recheck/);assert.match(old,/Earlier check/);
+ assert.match(old,/Earlier check/);assert.match(old,/preserved findings/);
  assert.match(documentValidatorUI({...ctx,t:(_en,ar)=>ar}),/الفحص/);
  const another=freshValidator();
  assert.equal(another.documents['hold-alpha'],undefined);
