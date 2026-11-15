@@ -45,3 +45,7 @@ Settings and change history are in page memory. Reload restores demo defaults. D
 ## Verification
 
 The complete test suite covers the four requirement combinations, access control, mandatory roles, ordering, cancellation, version conflicts, audit records, old/new check snapshots, inactive approval fields, and stale-download blocking. Browser checks cover save/error feedback, unsaved switching, account switching, updated checks, the upload modal, reduced page headers, desktop/mobile layout, and Arabic direction.
+
+## Editor refinement
+
+The configuration editor uses compact stage rows with shared column labels, separate Validation and Approval sections, and accessible Required switches. Save and Discard stay beside the page title while scrolling; saved/unsaved state is visible below the title. Change history is collapsed until requested. Mobile restores per-field labels and stacks inputs; Arabic mirrors the layout. Reordering and removal preserve focus near the edited stage.

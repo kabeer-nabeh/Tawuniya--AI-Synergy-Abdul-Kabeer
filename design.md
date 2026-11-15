@@ -185,3 +185,7 @@ Add an Excellence review tab only for the reviews capability. Use the full works
 Use one page title and the relevant action controls. Remove repeated eyebrows and introductory paragraphs from task pages. Supporting technical/demo detail belongs in expandable help. Preserve action warnings, evidence, required-field feedback, and confirmation semantics.
 
 Administration uses a document selector, separate validation/approval fieldsets, ordered stage rows, role selectors, save/discard controls, and expandable change history. Saved settings are versioned; old review snapshots remain unchanged. The submitted-document page uses a top-right primary Upload or try samples button and a native dialog with keyboard handling. Confirm document details through a single Review document action. Results show issues/evidence before document sections; audit details and settings are secondary.
+
+## Admin editor refinement
+
+Keep Save and Discard in a sticky page heading, with concise saved/unsaved feedback. Use separate bordered fieldsets for Validation and Approval, with a Required switch and stage count in each heading. Shared column labels and compact rows reduce vertical repetition on desktop; mobile uses stacked, explicitly labeled fields. Audit history is a disclosure. Keep focus in the relevant phase after reordering or removing a stage.

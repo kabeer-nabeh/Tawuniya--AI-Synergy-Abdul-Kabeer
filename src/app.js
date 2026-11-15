@@ -217,7 +217,7 @@ function updateAdminSaveState(){
   const ui=state.workflowAdmin,dirty=workflowDirty(ui,workflowStore);
   const save=document.querySelector('#wa-save');if(save)save.disabled=!dirty&&ui.draft.configured;
   const cancel=document.querySelector('[data-action="wa-cancel"]');if(cancel)cancel.disabled=!dirty;
-  const status=document.querySelector('#wa-dirty');if(status)status.textContent=dirty?t('Unsaved changes','تغييرات غير محفوظة'):t('Saved','محفوظ');
+  const status=document.querySelector('#wa-dirty');if(status){status.textContent=dirty?t('Unsaved changes','تغييرات غير محفوظة'):ui.draft.configured?t('All changes saved','جميع التغييرات محفوظة'):t('Not configured','غير مُعدّ');status.dataset.dirty=String(dirty);}
   const note=document.querySelector('#wa-save-notice');if(note)note.textContent='';
 }
 function documentFocus(){document.querySelector('#validator-heading')?.setAttribute('tabindex','-1');document.querySelector('#validator-heading')?.focus({preventScroll:true});}
@@ -829,6 +829,8 @@ app.addEventListener('click',async event=>{
     if(action==='wa-stay')ui.pendingType=null;
     render();
     if(action==='wa-add')document.querySelector(`#wa-name-${phase}-${ui.draft[phase].stages.at(-1).id}`)?.focus();
+    else if(action==='wa-move')document.querySelector(`#wa-name-${phase}-${id}`)?.focus({preventScroll:true});
+    else if(action==='wa-remove')document.querySelector(`[data-action="wa-add"][data-phase="${phase}"]`)?.focus({preventScroll:true});
     else document.querySelector('#wa-document-type')?.focus();
   }
   else if(['review-sample','review-intake','review-context','review-run','review-filter','review-latest','review-locate','review-copy','review-open-submission','review-clear-inbox','review-options','review-confirm-run'].includes(action)){
