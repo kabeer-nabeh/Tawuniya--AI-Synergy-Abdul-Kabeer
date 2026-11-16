@@ -28,7 +28,10 @@ test('sector, portfolio and assignment scopes select only their own records',()=
   assert.deepEqual(projectsFor({...getAccount('renad'),scope:{type:'manager',value:'unassigned'}}),[]);
 });
 test('sample documents respect validation capability and project assignment',()=>{
-  assert.deepEqual(documentIdsFor(getAccount('epmo')),['quarterly','project']);
+  // EPMO reviews documents in Excellence review, so it has no Validate a document task.
+  assert.deepEqual(documentIdsFor(getAccount('epmo')),[]);
+  assert.equal(can(getAccount('epmo'),'validate'),false);
+  assert.equal(can(getAccount('epmo'),'reviews'),true);
   assert.deepEqual(documentIdsFor(getAccount('afnan')),['project']);
   assert.deepEqual(documentIdsFor(getAccount('renad')),[]);
   for(const id of ['executive','health','technology'])assert.deepEqual(documentIdsFor(getAccount(id)),[]);

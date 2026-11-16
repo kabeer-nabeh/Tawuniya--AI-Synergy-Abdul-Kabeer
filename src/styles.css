@@ -2362,3 +2362,21 @@ section.er-other-options{padding:16px 0 22px;margin:0 0 22px}
 .er-upload-history td:first-child{min-width:0}
 .er-upload-history time{white-space:normal}
 @media(max-width:760px){.er-history-empty{padding:40px 16px}.er-upload-history{table-layout:auto}}
+
+/* Plain source citation under answers (no details page) */
+.source-cite{display:flex;align-items:center;gap:7px;margin:10px 0 0;font-size:11px;color:var(--muted)}
+.source-cite>.icon{width:13px;height:13px;flex-shrink:0}
+
+/* Create a document: complete an existing (uploaded) document */
+.ac-upload{display:flex;align-items:flex-start;gap:16px;margin-top:22px;padding:18px 20px;border:1px dashed color-mix(in oklch,var(--brand) 35%,var(--line));border-radius:12px;background:color-mix(in oklch,var(--brand-soft) 35%,var(--canvas))}
+.ac-upload-icon{display:grid;place-items:center;width:38px;height:38px;flex-shrink:0;border-radius:10px;background:var(--brand-soft);color:var(--brand)}
+.ac-upload-icon .icon{width:19px;height:19px}
+.ac-upload-copy{flex:1;min-width:0}
+.ac-upload-copy .ac-section-title{margin-bottom:4px}
+.ac-upload-copy>p{margin:0 0 4px;font-size:12px;color:var(--text)}
+.ac-upload-action{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0}
+.ac-upload-action label{cursor:pointer}
+.ac-upload-action label.is-disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
+.ac-upload-action small{font-size:10px;color:var(--muted)}
+.ac-upload input[type=file]:focus-visible+label{outline:2px solid var(--brand);outline-offset:2px}
+@media (max-width:640px){.ac-upload{flex-direction:column}.ac-upload-action{align-items:stretch;width:100%}}

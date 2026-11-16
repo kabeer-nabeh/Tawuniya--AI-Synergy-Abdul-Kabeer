@@ -47,7 +47,7 @@ test('labeled extraction preserves dates for validation and rejects next-heading
  const multiline=extractHoldFields('Project Manager\nAfnan Rayyani\nProject hold reason\nAwaiting agreement');
  assert.equal(multiline.manager,'Afnan Rayyani');assert.equal(multiline.reason,'Awaiting agreement');
 });
-test('report exposes skipped reasons, escaped evidence and finding-specific correction actions',()=>{
+test('report exposes skipped reasons, escaped evidence and is advisory only',()=>{
  const doc=createHoldDocument('hold-alpha',project);doc.artifact.fields.reason='<img onerror=alert(1)>';
  checkDocument(doc);
  const escape=s=>String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
@@ -55,9 +55,10 @@ test('report exposes skipped reasons, escaped evidence and finding-specific corr
  const html=holdReport(ctx);
  assert.ok(html.includes('&lt;script>report'));assert.ok(!html.includes('<img onerror'));
  assert.ok(html.includes('Signature verification is not connected'));
- assert.ok(html.includes('validator-edit'),'the owner can correct review fields');
- assert.ok(html.includes('data-field="hold-resumeDate"'));
- assert.ok(holdEditor({...ctx,fields:doc.artifact.fields}).includes('name="planningName"'));
+ assert.ok(!html.includes('validator-edit'),'no correction actions: the system is advisory only');
+ assert.ok(!html.includes('validator-recheck'),'no recheck without corrections');
+ assert.ok(html.includes('validator-report'),'the reviewer can download a review report');
+ assert.ok(!html.includes('Correct &amp; recheck')&&!html.includes('Correct & recheck'));
 });
 
 test('Project Hold setup guides to an in-scope project before offering validation',()=>{

@@ -261,3 +261,74 @@ export function validatorFields(draft, project) {
   const a = draft.answers;
   return { start: '2026-10-01', end: AUTHORING_AS_OF, owner: project.owner[0], nextAction: a.nextAction || '', nextDue: a.nextDue || '' };
 }
+
+// ---------- Complete an existing document (upload) ----------
+// A partly filled document is read in the browser; parts written as "Label: value" (or a table under its
+// label) are taken over, and the conversation then asks only for what is still missing.
+const ALIASES = {
+  deliverables: ['Deliverables list', 'List of deliverables'],
+  programManager: ['EPMO program manager', 'Program Manager'],
+  evidence: ['Evidence', 'Evidence of acceptance'],
+  notes: ['Notes', 'Reviewer notes'],
+  overall: ['Status', 'Overall'],
+  summary: ['Summary', 'Progress'],
+  risks: ['Risks', 'Risks and issues'],
+  nextDue: ['Due', 'Due date', 'Next action due date'],
+  holdStart: ['Hold start date', 'Hold start', 'Start of hold'],
+  resume: ['Resume date', 'Expected resumption date'],
+  reason: ['Reason', 'Hold reason'],
+};
+const norm = s => String(s ?? '').toLowerCase().replace(/[*_#>`]/g, '').replace(/\s+/g, ' ').trim();
+const PLACEHOLDER = /^(tbd|tbc|n\/?a|-|—|–|to be (confirmed|completed|added)|pending|\?+|\[.*\])$/i;
+const labelsOf = f => [...f.label, ...(ALIASES[f.id] || [])].map(norm);
+
+/** Template named in the first lines of the document, if any. */
+export function detectTemplate(text) {
+  const head = String(text).split(/\r?\n/).slice(0, 8).map(norm).filter(Boolean);
+  return AUTHORING_TEMPLATES.find(tpl => tpl.name.some(n => head.some(h => h.includes(norm(n)))))?.id || null;
+}
+
+/** Values found in the document text for the template's asked parts (unvalidated). */
+export function prefillFromText(templateId, text) {
+  const tpl = templateOf(templateId), lines = String(text).split(/\r?\n/), found = {};
+  for (const f of askedFields(tpl)) {
+    if (f.type === 'table') {
+      const start = lines.findIndex(l => labelsOf(f).includes(norm(l).replace(/[:：]$/, '')));
+      if (start < 0) continue;
+      const rows = [];
+      for (const l of lines.slice(start + 1)) {
+        const s = l.trim();
+        if (!s) { if (rows.length) break; continue; }
+        if (!s.includes('|')) break;
+        if (/^\|?\s*:?-{2,}/.test(s)) continue;
+        rows.push(s.replace(/^\||\|$/g, ''));
+      }
+      const parsed = parseTyped(f, rows.join('\n')).filter(r => !f.columns.every(c => !r[c.id] || c.label.some(l => norm(l) === norm(r[c.id]))));
+      if (parsed.length) found[f.id] = parsed;
+      continue;
+    }
+    for (const l of lines) {
+      const m = l.match(/^\s*[-*•]?\s*\**([^:：|]{2,60}?)\**\s*[:：]\s*(.*)$/);
+      if (!m || !labelsOf(f).includes(norm(m[1]))) continue;
+      const raw = m[2].replace(/\*\*/g, '').trim();
+      if (raw && !PLACEHOLDER.test(raw)) found[f.id] = parseTyped(f, raw);
+      break;
+    }
+  }
+  return found;
+}
+
+/** Start a draft from an uploaded document. Only values that pass the template's own checks are kept. */
+export function createDraftFromUpload(authoring, templateId, projectId, upload, now = Date.now()) {
+  const draft = createDraft(authoring, templateId, projectId, now);
+  const found = prefillFromText(templateId, upload.text);
+  const used = [];
+  for (const f of askedFields(templateOf(templateId))) {
+    if (!(f.id in found)) continue;
+    const result = validateValue(draft, f, found[f.id]);
+    if (!result.error) { draft.answers[f.id] = result.value; used.push(f.id); }
+  }
+  draft.source = { name: upload.name };
+  draft.fromUpload = used;
+  return draft;
+}

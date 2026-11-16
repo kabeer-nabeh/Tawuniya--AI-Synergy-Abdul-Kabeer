@@ -12,11 +12,12 @@ import { platformShell, PLATFORM_TABS } from './platform-shell.js';
 import { assistanceChat, freshAssistance } from './assistance-chat.js';
 import { workspaceIcons } from '../public/vendor/hugeicons/workspace-icons.js';
 import { freshValidator, validatorDocument, checkDocument, saveDocument, documentValidatorUI, addUploadedDocument } from './document-validator.js';
-import { emptyUpload, readUploadSelection, readUploadedFile, removeUploadFile, uploadSetup, resolvedUploadTemplate } from './document-upload.js';
+import { emptyUpload, readUploadSelection, readUploadedFile, removeUploadFile, uploadSetup, resolvedUploadTemplate, uploadError } from './document-upload.js';
 import { forecastUI, freshForecast, MAX_SCENARIOS } from './forecast-view.js';
 import { freshAuthoring, createDraft, pendingField, answerField, skipField, editField, parseTyped, commandOf, fieldOf, templateOf as authoringTemplate, validatorFields, isComplete as authoringComplete } from './document-create.js';
 import { authoringUI } from './document-create-view.js';
-import { AUTHORING_TEMPLATES as AUTHORING_LIST } from './document-create.js';
+import { reviewReportFile } from './review-report.js';
+import { AUTHORING_TEMPLATES as AUTHORING_LIST, createDraftFromUpload, detectTemplate } from './document-create.js';
 import { qualityUI, freshQuality, PAGE_STEP } from './quality-view.js';
 import { DEFAULT_CONFIG, normalizeConfig } from './quality-rules.js';
 
@@ -164,8 +165,9 @@ function welcome() {
   </section>`;
 }
 
+// Sources are cited as plain text: there is no source details page.
 function sourceButton(source, label) {
-  return `<button class="source-link" data-action="source" data-source="${source}">${icon('document')}<span>${label}</span>${icon('chevron')}</button>`;
+  return `<p class="source-cite">${icon('document')}<span>${t('Source','المصدر')}: ${label}</span></p>`;
 }
 
 function artifactFor(id) {
@@ -287,15 +289,15 @@ function reviewResponse(review) {
   const title=required?t('A few things need your attention','بعض العناصر تحتاج إلى انتباهك'):t('Ready for human review','جاهز للمراجعة البشرية');
   return `<div class="response-meta">${t('ARTIFACT REVIEW','مراجعة المستند')}<span>${t('Check','الفحص')} ${review.run} · ${t('Revision','النسخة')} ${review.revision}</span></div>
     <h2>${title}</h2><p class="review-document">${icon('document')}${doc.name()} <span>· ${t('Template v1.0','النموذج 1.0')}</span></p>
-    <p>${required?t('Complete the required items below, then run the checks again.','أكمل العناصر المطلوبة أدناه، ثم أعد الفحص.'):suggestions?t('The required sample checks passed. One optional improvement remains for you to consider.','اجتازت النسخة الفحوصات التجريبية المطلوبة. لا يزال هناك تحسين اختياري يمكنك مراجعته.'):t('All three sample checks passed. The revised document is ready for a reviewer to assess.','اجتاز المستند الفحوصات التجريبية الثلاثة، وهو جاهز لتقييم المراجع.')}</p>
+    <p>${required?t('Share these findings with the document owner. AI Synergy is advisory: it does not change the document.','شارك هذه الملاحظات مع مالك المستند. AI Synergy استشاري ولا يغيّر المستند.'):suggestions?t('The required sample checks passed. One optional improvement remains for you to consider.','اجتازت النسخة الفحوصات التجريبية المطلوبة. لا يزال هناك تحسين اختياري يمكنك مراجعته.'):t('All three sample checks passed. The revised document is ready for a reviewer to assess.','اجتاز المستند الفحوصات التجريبية الثلاثة، وهو جاهز لتقييم المراجع.')}</p>
     <div class="review-counts" aria-label="${t('Check results','نتائج الفحص')}"><span class="${required?'has-issues':'is-clear'}">${icon(required?'help':'check')}<strong>${required}</strong> ${t('required remaining','مطلوب متبقٍ')}</span><span><strong>${suggestions}</strong> ${t(suggestions===1?'suggestion':'suggestions','اقتراحات')}</span>${review.previous?`<span class="is-clear"><strong>${resolved}</strong> ${t('resolved this run','تمت معالجته في هذا الفحص')}</span>`:''}</div>
     <div class="findings" role="group" aria-label="${t('Validation findings','نتائج التحقق')}">${reviewDefinitions(review.fields).map(item=>{
       const passed=review.checks[item.key];
       const status=passed?(review.previous?.[item.key]===false?t('Resolved','تمت المعالجة'):t('Passed','اجتاز')):item.type==='required'?t('Required','مطلوب'):t('Suggestion','اقتراح');
-      return `<details class="finding" data-detail-key="${review.docId}-${review.run}-${item.key}"><summary><span class="finding-copy"><strong>${passed?item.passed:item.missing}</strong><small>${item.location}</small></span><span class="finding-status ${passed?'passed':item.type}">${icon(passed?'check-circle':item.type==='required'?'warning':'idea')}${status}</span>${icon('chevron')}</summary><div class="finding-body"><p>${item.rule}</p><div class="finding-value"><span>${t('Checked content','المحتوى المفحوص')}</span><p dir="auto">${escape(item.value)}</p></div><button class="text-button" data-action="edit-artifact" data-id="${review.docId}" data-field="${item.field}" ${state.busy?'disabled':''}>${t('Edit this section','تعديل هذا القسم')}${icon('right')}</button></div></details>`;
+      return `<details class="finding" data-detail-key="${review.docId}-${review.run}-${item.key}"><summary><span class="finding-copy"><strong>${passed?item.passed:item.missing}</strong><small>${item.location}</small></span><span class="finding-status ${passed?'passed':item.type}">${icon(passed?'check-circle':item.type==='required'?'warning':'idea')}${status}</span>${icon('chevron')}</summary><div class="finding-body"><p>${item.rule}</p><div class="finding-value"><span>${t('Checked content','المحتوى المفحوص')}</span><p dir="auto">${escape(item.value)}</p></div></div></details>`;
     }).join('')}</div>
     ${newer?`<p class="review-stale">${icon('document')}${t('Your saved draft is newer than this result. Recheck it to update the findings.','المسودة المحفوظة أحدث من هذه النتيجة. أعد فحصها لتحديث النتائج.')}</p>`:''}
-    <div class="review-actions"><button class="${required?'primary-button':'secondary-button'}" data-action="edit-artifact" data-id="${review.docId}" ${state.busy?'disabled':''}>${icon('edit')}${t('Edit sample document','تعديل المستند التجريبي')}</button><button class="${required?'secondary-button':'primary-button'}" data-action="run-validation" data-id="${review.docId}" ${state.busy?'disabled':''}>${icon('refresh')}${t('Recheck document','إعادة فحص المستند')}</button><button class="text-button" data-action="review-evidence" data-index="${index}">${icon('eye')}${t('View checked version','عرض النسخة المفحوصة')}</button></div>
+    <div class="review-actions"><button class="text-button" data-action="review-evidence" data-index="${index}">${icon('eye')}${t('View checked version','عرض النسخة المفحوصة')}</button></div>
     ${!required?`<details class="review-handoff" data-detail-key="${review.docId}-${review.run}-summary"><summary>${icon('document')}${t('Reviewer summary','ملخص للمراجع')}${icon('chevron')}</summary><p>${doc.name()} · ${t('Revision','النسخة')} ${review.revision}</p><p>${t('The reporting period and accountable owner are present.','فترة التقرير والمالك المسؤول محددان.')} ${suggestions?t('The next-step action or due date still needs improvement.','لا يزال إجراء الخطوة التالية أو موعدها بحاجة إلى تحسين.'):t('The next step includes an action and due date.','تتضمن الخطوة التالية إجراءً وموعدًا.')}</p><p>${t('Review the content for accuracy and follow the normal approval process.','راجع دقة المحتوى واتبع إجراءات الموافقة المعتادة.')}</p></details>`:''}
     <p class="small-copy review-boundary">${t('These are local checks on three sample fields. Human review is still required; no approval or Synergy update is performed.','هذه فحوصات محلية لثلاثة حقول تجريبية. تظل المراجعة البشرية مطلوبة، ولا يتم اعتماد المستند أو تحديث سينرجي.')}</p>`;
 }
@@ -381,7 +383,7 @@ function validationPicker() {
   return `<div class="validation-intro"><span class="validation-emblem">${icon('shield')}</span><p class="sample-label">${t('GOVERNANCE & PERFORMANCE','الحوكمة والأداء')}</p><h3>${t('Check before you submit','تحقّق قبل الإرسال')}</h3><p>${t('Find missing details, review suggestions, and prepare your document for human review.','اكتشف التفاصيل الناقصة، وراجع الاقتراحات، وجهّز مستندك للمراجعة البشرية.')}</p></div>
     <dl class="validation-scope"><div><dt>${t('Required checks','الفحوصات المطلوبة')}</dt><dd>${t('Reporting period and accountable owner','فترة التقرير والمالك المسؤول')}</dd></div><div><dt>${t('Suggested improvement','التحسين المقترح')}</dt><dd>${t('Next action and due date','الإجراء التالي والموعد النهائي')}</dd></div></dl>
     <p class="prompts-label">${t('Choose a sample document','اختر مستندًا تجريبيًا')}</p><div class="validation-documents">${documentsForAccount().map(doc=>`<button class="validation-document" data-action="attach" data-id="${doc.id}"><span class="validation-document-icon">${icon('document')}</span><span class="validation-document-copy"><strong>${doc.name()}</strong><small>${doc.meta()}</small><span>${t('Governance & Performance · Template v1.0','الحوكمة والأداء · النموذج 1.0')}</span></span>${icon('right')}</button>`).join('')||`<p class="scope-empty-copy">${t('No sample documents are available in your assigned project scope. Switch demo accounts to explore validation.','لا توجد مستندات تجريبية ضمن نطاق المشاريع المسندة إليك. بدّل الحساب التجريبي لاستكشاف التحقق.')}</p>`}</div>
-    <div class="validation-start-note">${icon('check-circle')}<p>${t('Select a document to start checking automatically. You can correct findings and recheck in the same conversation.','اختر مستندًا لبدء الفحص تلقائيًا. يمكنك معالجة الملاحظات وإعادة الفحص في المحادثة نفسها.')}</p></div><p class="small-copy">${t('This demo checks editable sample fields. Real document access and template validation will use Synergy integration.','يفحص هذا العرض حقولًا تجريبية قابلة للتعديل. سيعتمد الوصول إلى المستندات الفعلية والتحقق من النماذج على التكامل مع سينرجي.')}</p>`;
+    <div class="validation-start-note">${icon('check-circle')}<p>${t('Select a document to start checking automatically. Findings are advisory and the document is not changed.','اختر مستندًا لبدء الفحص تلقائيًا. الملاحظات استشارية ولا يتغير المستند.')}</p></div><p class="small-copy">${t('This demo checks editable sample fields. Real document access and template validation will use Synergy integration.','يفحص هذا العرض حقولًا تجريبية قابلة للتعديل. سيعتمد الوصول إلى المستندات الفعلية والتحقق من النماذج على التكامل مع سينرجي.')}</p>`;
 }
 
 function overlay() {
@@ -415,13 +417,35 @@ function languageControl() {
 function aiWorkspace() {
   const assistant=state.activeView==='assistant';
   const assistanceOpen=state.chatView!=='closed';
-  const assistantPage=assistanceOpen?`<div class="assistant-elsewhere">${mark()}<h2>${t('AI Assistance is open','المساعدة الذكية مفتوحة')}</h2><p>${t('Your chat is available in the assistance panel. Close it to continue working here.','محادثتك متاحة في لوحة المساعدة. أغلقها لمتابعة العمل هنا.')}</p><button class="secondary-button" data-action="chat-close">${icon('chat')}${t('Return to workspace assistant','العودة إلى مساعد مساحة العمل')}</button></div>`:active()?messages():welcome();
+  const assistantPage=assistanceOpen?`<div class="assistant-elsewhere">${mark()}<h2>${t('AI Assistance is open','المساعد الذكي مفتوح')}</h2><p>${t('Your chat is available in the assistance panel. Close it to continue working here.','محادثتك متاحة في لوحة المساعدة. أغلقها لمتابعة العمل هنا.')}</p><button class="secondary-button" data-action="chat-close">${icon('chat')}${t('Return to workspace assistant','العودة إلى مساعد مساحة العمل')}</button></div>`:active()?messages():welcome();
   const page=assistant?assistantPage:state.activeView==='reviews'?excellenceReviewUI({state:state.excellence,account:account(),t,icon,escape}):state.activeView==='documents'?(state.documentMode==='create'&&allowed('create')?authoring().page():foundation().documentsPage()):state.activeView==='forecasts'?forecast().page():state.activeView==='quality'?quality().page():state.activeView==='admin'?workflowAdminPage():foundation().overviewPage(state.activeView);
   const shell=assistant||state.activeView==='documents';
   return `<section class="embedded-ai-workspace" aria-label="${t('AI Synergy workspace','مساحة عمل AI Synergy')}"><header class="embedded-ai-heading">${foundation().navigation()}<span class="scope-tag">${icon('briefcase')}${foundation().scope}</span>${embeddedWorkspace?`<button class="sign-out-button" data-action="sign-out" title="${t('Sign out of AI Synergy','تسجيل الخروج من AI Synergy')}">${icon('sign-out')}<span>${t('Sign out','تسجيل الخروج')}</span></button>`:''}</header><div class="embedded-ai-body">${shell?sidebar():''}<div id="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab-${shell?'assistant':state.activeView}" class="workspace ${assistant&&active()?'has-conversation':''} ${assistant?'assistant-workspace':'task-workspace'}">${shell?foundation().taskSwitch():''}<main id="main" tabindex="-1" data-view="${state.activeView}">${page}</main>${assistant&&active()&&!assistanceOpen?`<div class="conversation-composer">${composer()}</div>`:''}</div></div></section>`;
 }
 // ---------- Create a document (guided conversation) ----------
-const authoring=()=>authoringUI({t,icon,escape,mark,a:state.authoring,projects:allowed('create')?projectsFor(account()):[],typing:state.authoringTyping});
+const authoring=()=>authoringUI({t,icon,escape,mark,a:state.authoring,projects:allowed('create')?projectsFor(account()):[],typing:state.authoringTyping,uploadMessage:acUploadMessage});
+function acUploadMessage(code,up){
+  if(code==='project-first')return t('Choose the project first, then upload the document.','اختر المشروع أولًا ثم ارفع المستند.');
+  if(code==='nothing-found'){const tpl=authoringTemplate(up.template);return t(`I couldn’t find any ${tpl?tpl.name[0]:'template'} parts in this file. Check that it uses the template’s headings (for example “Program manager: …”), pick the right template above, or start a new document.`,`لم أجد أي أجزاء من ${tpl?tpl.name[1]:'النموذج'} في هذا الملف. تأكد من استخدام عناوين النموذج، أو اختر النموذج الصحيح أعلاه، أو ابدأ مستندًا جديدًا.`);}
+  return uploadError(code,t);
+}
+// Complete an existing document: read the file in the browser, keep what it already has, ask for the rest.
+async function acUpload(files){
+  const a=state.authoring;if(!allowed('create'))return;
+  if(files.length!==1){a.upload={error:'multiple-files'};render();return;}
+  const project=projectsFor(account()).find(p=>p.id===a.setup.projectId);
+  if(!project){a.upload={error:'project-first'};render();document.querySelector('#ac-project')?.focus();return;}
+  const account0=state.accountId;a.upload={reading:true,name:files[0].name};render();
+  try{
+    const file=await readUploadedFile(files[0]);
+    if(state.accountId!==account0)return;
+    const templateId=detectTemplate(file.text)||a.setup.templateId;
+    const draft=createDraftFromUpload(a,templateId,project.id,file);
+    if(!draft.fromUpload.length){a.drafts=a.drafts.filter(d=>d!==draft);a.active=null;a.upload={error:'nothing-found',template:templateId};render();document.querySelector('.ac-upload .ac-error')?.scrollIntoView({block:'center'});return;}
+    a.upload={};a.composer='';state.drawer=null;render();acScroll();acFocus();
+    toast(t('Document read. Only the missing parts will be asked.','تمت قراءة المستند. سيُسأل عن الأجزاء الناقصة فقط.'));
+  }catch(error){if(state.accountId!==account0)return;a.upload={error:error?.message||'read-failed'};render();}
+}
 function acScroll(){const main=document.querySelector('#main');if(main)main.scrollTop=main.scrollHeight;}
 function acFocus(){const current=document.querySelector('.ac-msg.is-current');const field=current&&pendingField(authoring().active()||{});const target=field&&['text'].includes(field.type)?document.querySelector('#ac-message'):current?.querySelector('input,select,button.ac-option,button.primary-button')||document.querySelector('.ac-msg.is-ready .primary-button')||document.querySelector('#ac-message');target?.focus({preventScroll:true});}
 function acAfter(ok,typing=true){
@@ -465,7 +489,7 @@ function acValidate(){
 const DOC_TOPICS={
   checks:[['What does the validator check?','ماذا يفحص المدقق؟'],'shield'],
   formats:[['Which files can I upload?','ما الملفات التي يمكنني رفعها؟'],'upload'],
-  resolve:[['How do I resolve a finding?','كيف أعالج ملاحظة؟'],'check-circle'],
+  resolve:[['What do I do with a finding?','ماذا أفعل بالملاحظة؟'],'check-circle'],
   types:[['Which documents can I create?','ما المستندات التي يمكنني إنشاؤها؟'],'document'],
   steps:[['How does guided authoring work?','كيف يعمل التأليف الموجّه؟'],'edit'],
 };
@@ -489,7 +513,7 @@ function docTopicResponse(key){
   const go=(mode,label)=>`<button class="secondary-button" data-action="assistant-task" data-task="${mode}">${icon(mode==='create'?'edit':'shield')}${label}</button>`;
   if(key==='checks')return `${meta}<h2>${t('What the validator checks','ما يفحصه المدقق')}</h2><p>${t('Each document is compared with its template. In this demo it checks:','تتم مقارنة كل مستند بنموذجه. في هذا العرض يفحص:')}</p><ul><li>${t('<strong>Required:</strong> the reporting period and the accountable owner.','<strong>مطلوب:</strong> فترة التقرير والمالك المسؤول.')}</li><li>${t('<strong>Suggested:</strong> a next action with a due date.','<strong>مقترح:</strong> إجراء تالٍ مع موعد نهائي.')}</li><li>${t('<strong>Project Hold:</strong> the hold reason, dates and approvals in the template.','<strong>تعليق المشروع:</strong> سبب التعليق والتواريخ والموافقات الواردة في النموذج.')}</li></ul><p>${t('Results support a human reviewer. They do not approve the document.','تدعم النتائج المراجع البشري ولا تعتمد المستند.')}</p>${go('validate',t('Validate a document','التحقق من مستند'))}`;
   if(key==='formats')return `${meta}<h2>${t('Files you can upload','الملفات التي يمكنك رفعها')}</h2><p>${t('PDF, Word (.docx), TXT or Markdown, up to 10 MB. Files are read in your browser and are not sent to Synergy in this demo. Choose a template, or let it be detected automatically.','PDF أو Word (.docx) أو TXT أو Markdown بحجم يصل إلى 10 ميغابايت. تُقرأ الملفات في متصفحك ولا تُرسل إلى سينرجي في هذا العرض. اختر نموذجًا أو اتركه يُكتشف تلقائيًا.')}</p>${go('validate',t('Upload a document','رفع مستند'))}`;
-  if(key==='resolve')return `${meta}<h2>${t('Resolving a finding','معالجة ملاحظة')}</h2><ol><li>${t('Open the report and expand the finding to see what is missing.','افتح التقرير ووسّع الملاحظة لمعرفة الناقص.')}</li><li>${t('Select <strong>Edit document</strong> and correct the field.','اختر <strong>تعديل المستند</strong> وصحّح الحقل.')}</li><li>${t('Select <strong>Recheck</strong>. Resolved findings move to passed.','اختر <strong>إعادة الفحص</strong>. تنتقل الملاحظات المعالجة إلى المجتازة.')}</li></ol>`;
+  if(key==='resolve')return `${meta}<h2>${t('What to do with a finding','ماذا أفعل بالملاحظة')}</h2><ol><li>${t('Open the report and expand the finding to see the rule and the evidence.','افتح التقرير ووسّع الملاحظة لرؤية القاعدة والدليل.')}</li><li>${t('Download the review report and share it with the document owner.','نزّل تقرير المراجعة وشاركه مع مالك المستند.')}</li><li>${t('The owner updates the document in Synergy. AI Synergy is advisory and never changes the document.','يحدّث المالك المستند في سينرجي. AI Synergy استشاري ولا يغيّر المستند.')}</li></ol>`;
   if(key==='types')return `${meta}<h2>${t('Documents you can create','المستندات التي يمكنك إنشاؤها')}</h2><ul>${AUTHORING_LIST.map(tpl=>`<li><strong>${t(...tpl.name)}</strong> (${tpl.format}): ${t(...tpl.purpose)}</li>`).join('')}</ul><p>${t('Each one is created for a project assigned to you, using the approved template.','يُنشأ كل منها لمشروع مسند إليك باستخدام النموذج المعتمد.')}</p>${go('create',t('Create a document','إنشاء مستند'))}`;
   return `${meta}<h2>${t('How creating a document works','كيف يعمل إنشاء المستند')}</h2><ol><li>${t('Pick a template and one of your projects.','اختر نموذجًا وأحد مشاريعك.')}</li><li>${t('I fill in what Synergy knows, then ask for the rest one part at a time. Skip optional parts, and change any answer from the outline.','أملأ ما تعرفه سينرجي ثم أسألك عن الباقي جزءًا بعد جزء. تخطَّ الأجزاء الاختيارية وغيّر أي إجابة من المخطط.')}</li><li>${t('Review the template check, preview the document, then download it as a Word file for validation and approval.','راجع فحص النموذج وعاين المستند ثم نزّله كملف Word للتحقق والاعتماد.')}</li></ol>`;
 }
@@ -644,7 +668,7 @@ function render({focus=false,scroll=false,responseStart=false,resetScroll=false,
   document.querySelector('.skip-link').hidden=false;
   document.querySelector('.skip-link').href=embeddedWorkspace?'#main':'#platform-content';
   app.className=embeddedWorkspace?`platform-app synergy-embed${state.chatView==='compact'?' chat-docked':''}`:`platform-app chat-${state.chatView}`;
-  const launcher=`<button id="chat-launcher" class="chat-launcher assistance-launcher" data-action="chat-open" aria-label="${t('Open AI Assistance','فتح المساعدة الذكية')}" aria-expanded="${open}" aria-controls="synergy-chat">${icon('assistant')}<span>${t('AI Assistance','المساعدة الذكية')}</span>${state.assistance.unread?'<span class="launcher-unread" aria-hidden="true"></span>':''}</button>`;
+  const launcher=`<button id="chat-launcher" class="chat-launcher assistance-launcher" data-action="chat-open" aria-label="${t('Open AI Assistance','فتح المساعد الذكي')}" aria-expanded="${open}" aria-controls="synergy-chat">${icon('assistant')}<span>${t('AI Assistance','المساعد الذكي')}</span>${state.assistance.unread?'<span class="launcher-unread" aria-hidden="true"></span>':''}</button>`;
   const floating=open?assistanceChat({t,icon,mark,state,scope:foundation().scope,response:assistanceResponse,escape,languageControl,hasAlpha:canReadAlpha(account()),context:embeddedWorkspace?assistContext():null,embedded:embeddedWorkspace}):'';
   // The AI Assistance launcher belongs to the AI Synergy iframe, so it only appears on that tab.
   if(embeddedWorkspace){
@@ -708,7 +732,7 @@ app.addEventListener('input',event=>{
   if(el.dataset?.cell){const draft=authoring().active();if(!draft)return;const [r,col]=el.dataset.cell.split(':');draft.table=draft.table?.length?draft.table:[{}];while(draft.table.length<=Number(r))draft.table.push({});draft.table[Number(r)][col]=el.value;}
 });
 app.addEventListener('keydown',event=>{if(event.target.id==='ac-message'&&event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();acSend();}});
-app.addEventListener('change',event=>{if(event.target.id==='ac-project'&&allowed('create')){state.authoring.setup.projectId=event.target.value;render();document.querySelector('#ac-project')?.focus();}});
+app.addEventListener('change',event=>{if(event.target.id==='ac-file'&&allowed('create')){const files=[...event.target.files];event.target.value='';acUpload(files);return;}if(event.target.id==='ac-project'&&allowed('create')){state.authoring.upload={};state.authoring.setup.projectId=event.target.value;render();document.querySelector('#ac-project')?.focus();}});
 app.addEventListener('change',event=>{
   if(allowed('admin')&&(event.target.id==='wa-document-type'||event.target.dataset.workflowEnabled||event.target.dataset.workflowField==='roleId')){
     const ui=state.workflowAdmin;
@@ -892,6 +916,20 @@ app.addEventListener('click',async event=>{
     toast(t('Project value added to your draft. Save and recheck to update findings.','أُضيفت قيمة المشروع إلى المسودة. احفظ وأعد الفحص لتحديث النتائج.'));
   }
   else if(action==='hold-download-options'){const section=document.querySelector('#hold-download-title');section?.scrollIntoView({block:'start'});section?.focus({preventScroll:true});}
+  // Advisory: the validator never corrects a document; it downloads a report of the findings to share.
+  else if(action==='validator-report'){
+    if(!allowed('validate')||!validatorDocumentsForAccount().some(doc=>doc.id===id))return;
+    const entry=state.validator.documents[id],descriptor=validatorDocumentsForAccount().find(doc=>doc.id===id);
+    const review=entry?.reviews.find(r=>r.run===state.validator.run)||entry?.reviews.at(-1);if(!review)return;
+    const hold=entry.kind==='project-hold';
+    const findings=hold?review.findings.map(c=>({status:c.status,label:t(...c.label),rule:c.rule?t(...c.rule):'',evidence:c.evidence||''})):reviewDefinitions(review.fields).map(item=>({status:review.checks[item.key]?'passed':item.type,label:review.checks[item.key]?item.passed:item.missing,rule:item.rule,evidence:item.value}));
+    const labels=hold?{failed:t('Required','مطلوب'),warning:t('Warning','تنبيه'),skipped:t('Manual review','مراجعة يدوية'),passed:t('Passed','اجتاز')}:{required:t('Required','مطلوب'),suggested:t('Suggestion','اقتراح'),passed:t('Passed','اجتاز')};
+    const file=reviewReportFile({title:t('Review report','تقرير المراجعة')+' · '+descriptor.name(),subtitle:descriptor.meta(),meta:[[t('Check','الفحص'),String(review.run)],[t('Reviewed by','راجعه'),t(...account().name)],[t('Date','التاريخ'),new Date().toLocaleDateString(lang==='ar'?'ar-SA-u-nu-latn':'en-GB',{day:'numeric',month:'long',year:'numeric'})]],findings,labels,notes:{heading:t('Findings','الملاحظات'),status:t('Status','الحالة'),check:t('Check','الفحص'),evidence:t('Evidence','الدليل'),advisory:t('Advisory only. AI Synergy does not change the document; the document owner updates it in Synergy.','استشاري فقط. لا يغيّر AI Synergy المستند؛ يحدّثه مالكه في سينرجي.'),generated:t('Generated by AI Synergy from sample checks. Human review and approval remain required.','أُنشئ بواسطة AI Synergy من فحوصات تجريبية. تظل المراجعة والاعتماد البشري مطلوبين.')},dir:lang==='ar'?'rtl':'ltr',lang,fileStem:descriptor.name()});
+    const url=URL.createObjectURL(new Blob([file.content],{type:'application/msword'}));
+    const link=Object.assign(document.createElement('a'),{href:url,download:file.filename});document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+    entry.reportDownloaded=review.run;render();document.querySelector('[data-action="validator-report"]')?.focus();
+    toast(t('Review report downloaded. Share it with the document owner.','تم تنزيل تقرير المراجعة. شاركه مع مالك المستند.'));
+  }
   else if(action==='validator-download'){
     if(!allowed('validate')||!validatorDocumentsForAccount().some(doc=>doc.id===id))return;
     const entry=state.validator.documents[id];if(entry?.kind!=='project-hold')return;

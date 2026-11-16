@@ -88,3 +88,38 @@ test('the download is a Word-readable document with the answers and escapes user
   assert.doesNotMatch(file.content, /<script>/);
   assert.match(ui.page(), /is ready/);
 });
+
+import { detectTemplate, prefillFromText, createDraftFromUpload } from '../src/document-create.js';
+
+const partial = `Approved Deliverables
+Project: Project Alpha
+Program manager: Mohammed Said
+Business acceptance: Partly accepted
+Evidence location: TBD
+
+Deliverables
+| Deliverable | Description | Deliverable date | Owner | Date updated | Status |
+|---|---|---|---|---|---|
+| Requirements sign-off | Approved by the sponsor | 15/09/2026 | Afnan Rayyani | 13/10/2026 | Accepted |
+`;
+
+test('an uploaded draft keeps what it has and asks only for what is missing', () => {
+  assert.equal(detectTemplate(partial), 'deliverables');
+  const found = prefillFromText('deliverables', partial);
+  assert.equal(found.programManager, 'Mohammed Said');
+  assert.equal(found.acceptance, 'partly');
+  assert.equal(found.evidence, undefined, 'placeholders such as TBD count as missing');
+  assert.equal(found.deliverables.length, 1, 'the table header row is not a deliverable');
+  const a = freshAuthoring();
+  const d = createDraftFromUpload(a, 'deliverables', 'alpha', { name: 'deliverables.txt', text: partial }, 0);
+  assert.deepEqual(d.fromUpload, ['programManager', 'deliverables', 'acceptance']);
+  assert.equal(d.answers.deliverables[0].date, '2026-09-15');
+  assert.equal(pendingField(d).id, 'evidence', 'the first missing part is asked next');
+});
+
+test('invalid uploaded values are not kept, and unrelated files find nothing', () => {
+  const d = createDraftFromUpload(freshAuthoring(), 'hold', 'alpha', { name: 'h.txt', text: 'Project Hold Request\nHold starts: 15/11/2026\nExpected resume date: 01/11/2026\nReason for hold: Budget constraints' }, 0);
+  assert.deepEqual(d.fromUpload, ['reason', 'holdStart'], 'a resume date before the hold start is dropped');
+  assert.equal(detectTemplate('Meeting notes\nNothing to see'), null);
+  assert.deepEqual(prefillFromText('status', 'Meeting notes\nAgenda: budget'), {});
+});

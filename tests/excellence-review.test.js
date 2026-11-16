@@ -93,7 +93,7 @@ test('review UI escapes source and evidence and has no owner correction or appro
  const html=ui(state);assert.ok(html.includes('&lt;img'));assert.ok(html.includes('&lt;script&gt;'));
  assert.doesNotMatch(html,/<script>|<img src=x/);
  for(const action of ['validator-edit','validator-download','hold-use-project','approve-document','reject-document'])assert.ok(!html.includes(`data-action="${action}"`));
- assert.match(html,/data-action="review-context"/);assert.match(html,/Document sections/);
+ assert.doesNotMatch(html,/data-action="review-context"/);assert.doesNotMatch(html,/data-action="review-locate"/);assert.match(html,/Document sections/);
  assert.match(excellenceReviewUI({state,account:reviewer,t:(_en,ar)=>ar,escape,icon:()=>''}),/أقسام المستند/);
 });
 test('new review state and owner fields remain isolated',()=>{

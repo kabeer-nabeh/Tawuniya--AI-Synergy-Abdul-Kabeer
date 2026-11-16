@@ -9,11 +9,11 @@ export const ACCOUNTS = [
 ];
 export const ROLES = {
   leadership:{label:['Leadership','القيادة'],capabilities:['assistant','forecasts','quality']},
-  epmo:{label:['EPMO Excellence','تميز إدارة المشاريع'],capabilities:['assistant','documents','validate','reviews','forecasts','quality','scan','admin']},
+  epmo:{label:['EPMO Excellence','تميز إدارة المشاريع'],capabilities:['assistant','reviews','forecasts','quality','scan','admin']},
   manager:{label:['Project Manager','مدير مشروع'],capabilities:['assistant','documents','create','validate','forecasts','quality','scan']},
 };
 export const VIEWS = [
-  {id:'assistant',label:['AI Assistance','المساعدة الذكية'],icon:'huge-ai-chat'},
+  {id:'assistant',label:['AI Assistance','المساعد الذكي'],icon:'huge-ai-chat'},
   {id:'documents',label:['AI Document Validator','التحقق الذكي من المستندات'],icon:'huge-ai-scan-text'},
   {id:'reviews',label:['Excellence review','مراجعة فريق التميز'],icon:'huge-ai-scan-text'},
   {id:'forecasts',label:['Forecasts','التوقعات'],icon:'huge-forecast'},
